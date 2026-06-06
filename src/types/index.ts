@@ -28,8 +28,12 @@ export interface Prediction {
     id: string
     user_id: string
     match_id: string
-    home_score: number
-    away_score: number
+    home_score: number | null
+    away_score: number | null
+    original_home_score?: number | null
+    original_away_score?: number | null
+    is_repredicted?: boolean
+    qualifier_pick?: string | null
     created_at: string
     updated_at: string
 }

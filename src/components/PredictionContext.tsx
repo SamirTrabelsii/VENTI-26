@@ -1,13 +1,31 @@
 'use client'
-import React, { createContext, useContext, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import type { Prediction, BracketPick } from '@/types'
+import type { Prediction, BracketPick as RawBracketPick } from '@/types'
 
-export type BracketPickData = { team_code: string, home_score: number | '', away_score: number | '' }
+export interface BracketPick {
+    team_code: string
+    home_score?: number | ''
+    away_score?: number | ''
+    predicted_home_team?: string
+    predicted_away_team?: string
+    original_team_code?: string
+    is_repredicted?: boolean
+}
+
+export type BracketPickData = { 
+    team_code: string, 
+    home_score: number | '', 
+    away_score: number | '',
+    predicted_home_team?: string,
+    predicted_away_team?: string,
+    original_team_code?: string,
+    is_repredicted?: boolean
+}
 
 interface PredictionContextType {
-    groupScores: Record<string, { home: number | '', away: number | '' }>
+    groupScores: Record<string, { home: number | '', away: number | '', original_home: number | '', original_away: number | '', is_repredicted: boolean }>
     setGroupScore: (matchId: string, home: number | '', away: number | '') => void
     bracketPicks: Record<string, BracketPickData>
     setBracketPick: (key: string, data: BracketPickData) => void
@@ -40,30 +58,59 @@ export function PredictionProvider({
     const [saving, setSaving] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-    const [groupScores, setGroupScores] = useState<Record<string, { home: number | '', away: number | '' }>>(() => {
-        const init: Record<string, { home: number | '', away: number | '' }> = {}
+    const [groupScores, setGroupScores] = useState<Record<string, { home: number | '', away: number | '', original_home: number | '', original_away: number | '', is_repredicted: boolean }>>(() => {
+        const init: Record<string, { home: number | '', away: number | '', original_home: number | '', original_away: number | '', is_repredicted: boolean }> = {}
         initialPredictions.forEach(p => {
-            init[p.match_id] = { home: p.home_score, away: p.away_score }
+            init[p.match_id] = { 
+                home: p.home_score ?? '', 
+                away: p.away_score ?? '',
+                original_home: (p as any).original_home_score ?? '',
+                original_away: (p as any).original_away_score ?? '',
+                is_repredicted: (p as any).is_repredicted ?? false
+            }
         })
         return init
     })
 
     const [bracketPicks, setBracketPicks] = useState<Record<string, BracketPickData>>(() => {
         const init: Record<string, BracketPickData> = {}
-        initialBracketPicks.forEach(b => {
+        initialBracketPicks.forEach((b: any) => {
             init[`${b.round}_${b.slot_index}`] = {
                 team_code: b.team_code,
                 home_score: b.home_score ?? '',
-                away_score: b.away_score ?? ''
+                away_score: b.away_score ?? '',
+                predicted_home_team: b.predicted_home_team,
+                predicted_away_team: b.predicted_away_team,
+                original_team_code: b.original_team_code,
+                is_repredicted: b.is_repredicted
             }
         })
         return init
     })
 
-    const setGroupScore = (matchId: string, home: number | '', away: number | '') => {
-        setGroupScores(prev => ({ ...prev, [matchId]: { home, away } }))
+    // Debounced setGroupScore: accumulate rapid changes and batch into one state update
+    const pendingScores = useRef<Record<string, { home: number | '', away: number | '' }>>({})
+    const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const setGroupScore = useCallback((matchId: string, home: number | '', away: number | '') => {
+        // Immediately update the pending ref (no re-render)
+        pendingScores.current[matchId] = { home, away }
         setHasUnsavedChanges(true)
-    }
+
+        // Debounce: flush all pending changes to React state after 250ms of inactivity
+        if (debounceTimer.current) clearTimeout(debounceTimer.current)
+        debounceTimer.current = setTimeout(() => {
+            const pending = { ...pendingScores.current }
+            pendingScores.current = {}
+            setGroupScores(prev => {
+                const next = { ...prev }
+                for (const [id, scores] of Object.entries(pending)) {
+                    next[id] = { ...prev[id], ...scores }
+                }
+                return next
+            })
+        }, 250)
+    }, [])
 
     const setBracketPick = (key: string, data: BracketPickData) => {
         setBracketPicks(prev => ({ ...prev, [key]: data }))
@@ -109,6 +156,8 @@ export function PredictionProvider({
                         team_code: bracketPicks[key].team_code,
                         home_score: bracketPicks[key].home_score === '' ? null : bracketPicks[key].home_score,
                         away_score: bracketPicks[key].away_score === '' ? null : bracketPicks[key].away_score,
+                        predicted_home_team: bracketPicks[key].predicted_home_team,
+                        predicted_away_team: bracketPicks[key].predicted_away_team,
                     }
                 })
 

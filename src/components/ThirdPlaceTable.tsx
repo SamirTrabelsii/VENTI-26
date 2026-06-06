@@ -1,7 +1,9 @@
 'use client'
 
-import { getFlagUrl, getTeam, MatchData } from '@/lib/wc2026-data'
+import { memo } from 'react'
+import { getTeam, MatchData } from '@/lib/wc2026-data'
 import type { Prediction } from '@/types'
+import TeamFlag from '@/components/TeamFlag'
 
 interface Props {
     predictions: Prediction[]
@@ -21,7 +23,7 @@ interface TeamStats {
     gd?: number
 }
 
-export default function ThirdPlaceTable({ predictions, groupMatches }: Props) {
+const ThirdPlaceTable = memo(function ThirdPlaceTable({ predictions, groupMatches }: Props) {
     const teams: Record<string, TeamStats> = {}
 
     // Initialize all teams
@@ -36,8 +38,8 @@ export default function ThirdPlaceTable({ predictions, groupMatches }: Props) {
         const p = predMap.get(m.id)
         if (!p) return // Only count matches with predictions
 
-        const home = p.home_score
-        const away = p.away_score
+        const home = p.home_score ?? 0
+        const away = p.away_score ?? 0
 
         teams[m.home_team].p += 1
         teams[m.away_team].p += 1
@@ -119,7 +121,7 @@ export default function ThirdPlaceTable({ predictions, groupMatches }: Props) {
                                     <td style={{ padding: '12px 20px', color: 'var(--muted)', width: 14 }}>{i + 1}</td>
                                     <td style={{ padding: '12px 20px', color: 'var(--muted)', width: 14, fontWeight: 700 }}>{row.group}</td>
                                     <td style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}>
-                                        <img src={getFlagUrl(row.code)} alt={row.code} style={{ width: 24, borderRadius: 2 }} />
+                                        <TeamFlag teamCode={row.code} size={24} />
                                         {getTeam(row.code)?.name || row.code}
                                     </td>
                                     <td style={{ padding: '12px 10px', textAlign: 'center', color: 'var(--dim)' }}>{row.p}</td>
@@ -143,4 +145,6 @@ export default function ThirdPlaceTable({ predictions, groupMatches }: Props) {
             </div>
         </div>
     )
-}
+})
+
+export default ThirdPlaceTable

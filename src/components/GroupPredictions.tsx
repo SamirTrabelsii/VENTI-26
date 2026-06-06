@@ -1,11 +1,12 @@
 'use client'
 
+import { memo } from 'react'
 import MatchCard from '@/components/MatchCard'
 import type { MatchData } from '@/lib/wc2026-data'
-import { getFlagUrl, getTeam } from '@/lib/wc2026-data'
+import { getTeam } from '@/lib/wc2026-data'
 import type { Prediction } from '@/types'
-
 import { usePredictions } from '@/components/PredictionContext'
+import TeamFlag from '@/components/TeamFlag'
 
 interface Props {
     activeMatches: MatchData[]
@@ -14,7 +15,7 @@ interface Props {
     nextGroup: string | null
 }
 
-export default function GroupPredictions({ activeMatches, userId, nextGroup }: Props) {
+const GroupPredictions = memo(function GroupPredictions({ activeMatches, userId, nextGroup }: Props) {
     const { groupScores, setGroupScore } = usePredictions()
 
 
@@ -121,7 +122,7 @@ export default function GroupPredictions({ activeMatches, userId, nextGroup }: P
                             <tr key={row.code} style={{ borderTop: '1px solid var(--border)', background: i < 2 ? 'rgba(34, 197, 94, 0.05)' : 'transparent' }}>
                                 <td style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}>
                                     <span style={{ color: 'var(--muted)', width: 14 }}>{i + 1}</span>
-                                    <img src={getFlagUrl(row.code)} alt={row.code} style={{ width: 24, borderRadius: 2 }} />
+                                    <TeamFlag teamCode={row.code} size={24} />
                                     {getTeam(row.code)?.name || row.code}
                                 </td>
                                 <td style={{ padding: '12px 10px', textAlign: 'center', color: 'var(--dim)' }}>{row.p}</td>
@@ -166,4 +167,6 @@ export default function GroupPredictions({ activeMatches, userId, nextGroup }: P
             </div>
         </div>
     )
-}
+})
+
+export default GroupPredictions

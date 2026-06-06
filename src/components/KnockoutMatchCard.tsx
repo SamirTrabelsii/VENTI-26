@@ -1,4 +1,5 @@
-import { getFlagUrl, getTeam } from '@/lib/wc2026-data'
+import { getTeam } from '@/lib/wc2026-data'
+import TeamFlag from '@/components/TeamFlag'
 
 interface KnockoutMatchCardProps {
     matchId: string
@@ -94,7 +95,7 @@ export default function KnockoutMatchCard({
                 borderBottom: '1px solid var(--border)',
             }}>
                 {homeTeam ? (
-                    <img src={getFlagUrl(homeTeam.code)} alt={homeTeam.code} style={{ width: 28, borderRadius: 3, flexShrink: 0 }} />
+                    <TeamFlag teamCode={homeTeam.code} size={28} />
                 ) : (
                     <span style={{ fontSize: 20, flexShrink: 0 }}>🏳️</span>
                 )}
@@ -137,7 +138,7 @@ export default function KnockoutMatchCard({
             {/* Away team row */}
             <div style={teamRowStyle}>
                 {awayTeam ? (
-                    <img src={getFlagUrl(awayTeam.code)} alt={awayTeam.code} style={{ width: 28, borderRadius: 3, flexShrink: 0 }} />
+                    <TeamFlag teamCode={awayTeam.code} size={28} />
                 ) : (
                     <span style={{ fontSize: 20, flexShrink: 0 }}>🏳️</span>
                 )}
@@ -216,7 +217,7 @@ export default function KnockoutMatchCard({
                                     }}
                                 >
                                     {team && (
-                                        <img src={getFlagUrl(team.code)} alt={team.code} style={{ width: 16, borderRadius: 2 }} />
+                                        <TeamFlag teamCode={team.code} size={16} />
                                     )}
                                     {team?.name || code}
                                 </button>

@@ -100,3 +100,37 @@ body {
 .border-gold {
     border: 1px solid var(--border-gold) !important;
 }
+
+/* ── Modern UI Polish ── */
+
+.glass-panel {
+    background: rgba(28, 28, 28, 0.6) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.gradient-text {
+    background: linear-gradient(to right, var(--gold-light), var(--gold), var(--gold-dim));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+}
+
+.hover-glow {
+    transition: all 0.3s ease;
+}
+.hover-glow:hover {
+    box-shadow: 0 0 15px var(--border-gold);
+    border-color: var(--gold-dim) !important;
+    transform: translateY(-2px);
+}
+
+.card-transition {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-transition:hover {
+    background: var(--surface3) !important;
+}

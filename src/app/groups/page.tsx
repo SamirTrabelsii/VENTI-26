@@ -305,7 +305,7 @@ export default function GroupsPage() {
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 18 }}>
-                        {groups.map(g => <GroupCard key={g.id} g={g} currentUserId={userId!} displayName={displayName} />)}
+                        {groups.map(g => <GroupCard key={g.id} g={g} />)}
 
                         {/* Create new card */}
                         <button

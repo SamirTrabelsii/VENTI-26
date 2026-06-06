@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import type { Prediction } from '@/types'
 import type { MatchData } from '@/lib/wc2026-data'
-import { getFlagUrl, getTeam } from '@/lib/wc2026-data'
+import { getTeam } from '@/lib/wc2026-data'
 import { createClient } from '@/lib/supabase/client'
+import TeamFlag from '@/components/TeamFlag'
 
 interface Props {
     match: MatchData
@@ -52,8 +53,8 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
     }
 
     const kickoff = new Date(match.kickoff)
-    const dateStr = kickoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    const timeStr = kickoff.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+    const dateStr = kickoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Etc/GMT-1' })
+    const timeStr = kickoff.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT-1' })
 
     const selectStyle: React.CSSProperties = {
         background: 'var(--surface2)',
@@ -90,8 +91,18 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                 borderBottom: '1px solid var(--border)',
                 fontSize: 11, color: 'var(--muted)',
             }}>
-                <span style={{ fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                <span style={{ fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
                     Group {match.group_label} · Match {match.match_number} · {dateStr} {timeStr} UTC
+                    {prediction && !prediction.is_repredicted && (
+                        <span style={{ background: 'rgba(212,168,67,0.15)', color: 'var(--gold)', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>
+                            🔒 ORIGINAL
+                        </span>
+                    )}
+                    {prediction && prediction.is_repredicted && (
+                        <span style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>
+                            LIVE
+                        </span>
+                    )}
                 </span>
                 <span>{match.venue}, {match.city}</span>
             </div>
@@ -101,7 +112,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
 
                 {/* Home team */}
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <img src={getFlagUrl(match.home_team)} alt={match.home_team} style={{ width: 40, borderRadius: 4, objectFit: 'cover' }} />
+                    <TeamFlag teamCode={match.home_team} size={40} />
                     <div>
                         <div style={{ fontWeight: 600, fontSize: 15 }}>{getTeam(match.home_team)?.name || match.home_team}</div>
                     </div>
@@ -154,7 +165,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
 
                 {/* Away team */}
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, flexDirection: 'row-reverse' }}>
-                    <img src={getFlagUrl(match.away_team)} alt={match.away_team} style={{ width: 40, borderRadius: 4, objectFit: 'cover' }} />
+                    <TeamFlag teamCode={match.away_team} size={40} />
                     <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 600, fontSize: 15 }}>{getTeam(match.away_team)?.name || match.away_team}</div>
                     </div>

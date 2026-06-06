@@ -7,6 +7,7 @@ import { getRobohashUrl } from '@/lib/wc2026-data'
 
 const TABS = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/fixtures', label: 'Fixtures' },
     { href: '/predict', label: 'Predict' },
     { href: '/groups', label: 'Groups' },
     { href: '/leaderboard', label: 'Leaderboard' }

@@ -1,8 +1,11 @@
 'use client'
 
+import { useState, useMemo, useCallback } from 'react'
 import { usePredictions } from './PredictionContext'
 import KnockoutMatchCard from './KnockoutMatchCard'
-import { GROUPS, GROUP_MATCHES, R32_SLOTS, getTeam, getFlagUrl } from '@/lib/wc2026-data'
+import { GROUPS, GROUP_MATCHES, R32_SLOTS, getTeam, isGlobalLockPassed, isBracketLocked } from '@/lib/wc2026-data'
+import { useRealTournament } from '@/lib/useRealTournament'
+import TeamFlag from '@/components/TeamFlag'
 
 type Round = 'r32' | 'r16' | 'qf' | 'sf' | 'third_place' | 'final' | 'champion'
 interface Slot { home: string; away: string }
@@ -111,12 +114,37 @@ function buildR32Slots(data: { groupStandings: Record<string, string[]>, thirdPl
 
 export default function BracketSection() {
     const { groupScores, bracketPicks, setBracketPick } = usePredictions()
+    const isLocked = isBracketLocked()
+    const [viewMode, setViewMode] = useState<'live' | 'original'>('live')
+    const realState = useRealTournament()
 
-    // Base R32 slots derived from group stage predictions
-    const r32Slots = buildR32Slots(computeGroupStandings(groupScores))
+    // If viewing original, construct a fake groupScores object using original_home/away
+    const effectiveGroupScores = useMemo(() => {
+        if (viewMode === 'live') {
+            // Live bracket derives its base R32 from the REAL tournament standings, not user predictions!
+            // We map realState to the format computeGroupStandings outputs
+            return {
+                groupStandings: realState.groupStandings,
+                thirdPlaceRanking: realState.thirdPlaceRanking
+            }
+        }
+        
+        const original: typeof groupScores = {}
+        for (const [id, s] of Object.entries(groupScores)) {
+            original[id] = { 
+                ...s, 
+                home: (s as any).original_home !== '' ? (s as any).original_home : s.home,
+                away: (s as any).original_away !== '' ? (s as any).original_away : s.away 
+            }
+        }
+        return computeGroupStandings(original)
+    }, [groupScores, viewMode, realState])
+
+    // Base R32 slots derived from effective scores
+    const r32Slots = useMemo(() => buildR32Slots(effectiveGroupScores), [effectiveGroupScores])
 
     // Build slots dynamically
-    const getSlotsForRound = (round: Round): Slot[] => {
+    const getSlotsForRound = useCallback((round: Round): Slot[] => {
         if (round === 'r32') return r32Slots
 
         if (round === 'third_place') {
@@ -136,8 +164,8 @@ export default function BracketSection() {
             const sf1_home = qf2_pick && qf2_pick !== 'TBD' ? qf2_pick : 'TBD'
             const sf1_away = qf3_pick && qf3_pick !== 'TBD' ? qf3_pick : 'TBD'
 
-            const sf0_winner = sf0_pick?.team_code
-            const sf1_winner = sf1_pick?.team_code
+            const sf0_winner = viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && sf0_pick?.original_team_code ? sf0_pick.original_team_code : sf0_pick?.team_code)
+            const sf1_winner = viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && sf1_pick?.original_team_code ? sf1_pick.original_team_code : sf1_pick?.team_code)
 
             let third_home = 'TBD'
             if (sf0_winner === sf0_home) third_home = sf0_away
@@ -156,24 +184,25 @@ export default function BracketSection() {
         // Final derives from SF
         if (round === 'final') {
             return [{
-                home: bracketPicks['sf_0']?.team_code ?? 'TBD',
-                away: bracketPicks['sf_1']?.team_code ?? 'TBD'
+                home: (viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && bracketPicks['sf_0']?.original_team_code ? bracketPicks['sf_0'].original_team_code : bracketPicks['sf_0']?.team_code)) ?? 'TBD',
+                away: (viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && bracketPicks['sf_1']?.original_team_code ? bracketPicks['sf_1'].original_team_code : bracketPicks['sf_1']?.team_code)) ?? 'TBD'
             }]
         }
 
-        const slots: Slot[] = []
-        for (let i = 0; i < config.slots; i++) {
-            const homePickKey = `${prevRound.key}_${i * 2}`
-            const awayPickKey = `${prevRound.key}_${i * 2 + 1}`
-            slots.push({
-                home: bracketPicks[homePickKey]?.team_code ?? 'TBD',
-                away: bracketPicks[awayPickKey]?.team_code ?? 'TBD',
-            })
-        }
-        return slots
-    }
+        return Array.from({ length: config.slots }).map((_, i) => {
+            const matchIndex1 = i * 2
+            const matchIndex2 = i * 2 + 1
+            const p1 = bracketPicks[`${prevRound.key}_${matchIndex1}`]
+            const p2 = bracketPicks[`${prevRound.key}_${matchIndex2}`]
+            return {
+                home: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex1}`] : (viewMode === 'original' && p1?.original_team_code ? p1.original_team_code : p1?.team_code)) ?? 'TBD',
+                away: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex2}`] : (viewMode === 'original' && p2?.original_team_code ? p2.original_team_code : p2?.team_code)) ?? 'TBD'
+            }
+        })
+    }, [r32Slots, bracketPicks, viewMode, realState])
 
     const handleChange = (round: Round, slotIndex: number, homeScore: number | '', awayScore: number | '', advancingTeam: string | null) => {
+        if (isLocked) return;
         let adv = advancingTeam
         if (!adv) {
             if (typeof homeScore === 'number' && typeof awayScore === 'number') {
@@ -190,7 +219,9 @@ export default function BracketSection() {
         setBracketPick(`${round}_${slotIndex}`, {
             team_code: adv || '',
             home_score: homeScore,
-            away_score: awayScore
+            away_score: awayScore,
+            predicted_home_team: getSlotsForRound(round)[slotIndex].home,
+            predicted_away_team: getSlotsForRound(round)[slotIndex].away
         })
     }
 
@@ -225,7 +256,7 @@ export default function BracketSection() {
                                     awayCode={slot?.away ?? 'TBD'}
                                     homeScore={pickData?.home_score ?? ''}
                                     awayScore={pickData?.away_score ?? ''}
-                                    advancingCode={pickData?.team_code || null}
+                                    advancingCode={viewMode === 'live' ? realState.knockoutResults[`${round}_${i}`] || pickData?.team_code || null : viewMode === 'original' && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
                                     onChange={(_, h, a, adv) => handleChange(round, i, h, a, adv)}
                                 />
                             </div>
@@ -236,11 +267,40 @@ export default function BracketSection() {
         )
     }
 
-    const champCode = bracketPicks['final_0']?.team_code
+    const champCodeRaw = bracketPicks['final_0']
+    const champCode = viewMode === 'live' ? realState.knockoutResults['final_0'] : (viewMode === 'original' && champCodeRaw?.original_team_code ? champCodeRaw.original_team_code : champCodeRaw?.team_code)
     const championTeam = champCode && champCode !== 'TBD' ? getTeam(champCode) : null
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', marginTop: 40 }}>
+            {/* Toggle View Mode */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+                <div style={{ background: 'var(--surface2)', padding: 4, borderRadius: 12, display: 'flex', gap: 4, border: '1px solid var(--border)' }}>
+                    <button 
+                        onClick={() => setViewMode('live')}
+                        style={{
+                            padding: '8px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                            background: viewMode === 'live' ? 'var(--gold)' : 'transparent',
+                            color: viewMode === 'live' ? 'var(--black)' : 'var(--muted)',
+                            fontWeight: 600, fontSize: 14, transition: 'all 0.2s'
+                        }}
+                    >
+                        Live Bracket
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('original')}
+                        style={{
+                            padding: '8px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                            background: viewMode === 'original' ? 'var(--gold)' : 'transparent',
+                            color: viewMode === 'original' ? 'var(--black)' : 'var(--muted)',
+                            fontWeight: 600, fontSize: 14, transition: 'all 0.2s'
+                        }}
+                    >
+                        Original Predictions
+                    </button>
+                </div>
+            </div>
+
             <div style={{ overflowX: 'auto', paddingBottom: 60 }}>
                 <div style={{ display: 'flex', gap: 24, minWidth: 2800, padding: '0 20px', alignItems: 'stretch' }}>
                     
@@ -274,7 +334,7 @@ export default function BracketSection() {
                             {championTeam ? (
                                 <>
                                     <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
-                                        <img src={getFlagUrl(championTeam.code)} alt={championTeam.code} style={{ width: 90, height: 65, borderRadius: 6 }} />
+                                        <TeamFlag teamCode={championTeam.code} size={90} style={{ height: 65 }} />
                                     </div>
                                     <div style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: 'var(--cream)', lineHeight: 1 }}>
                                         {championTeam.name}

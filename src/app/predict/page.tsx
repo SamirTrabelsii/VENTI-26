@@ -3,32 +3,28 @@ import { redirect } from 'next/navigation'
 import Nav from '@/components/Nav'
 import GroupPredictions from '@/components/GroupPredictions'
 import ThirdPlaceTable from '@/components/ThirdPlaceTable'
+import LockBanner from '@/components/LockBanner'
+import HowToPlay from '@/components/HowToPlay'
 import BracketSection from '@/components/BracketSection'
 import { PredictionProvider } from '@/components/PredictionContext'
 import { GROUPS, GROUP_MATCHES, getGroupMatches, getFlagUrl } from '@/lib/wc2026-data'
+import TeamFlag from '@/components/TeamFlag'
 
 export default async function PredictPage() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/auth/login')
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-    // Group stage predictions
-    const { data: predictions } = await supabase
-        .from('predictions')
-        .select('*')
-        .eq('user_id', user.id)
-
-    // Bracket predictions
-    const { data: bracketPicks } = await supabase
-        .from('bracket_picks')
-        .select('*')
-        .eq('user_id', user.id)
+    // ── Parallel DB fetch ─────────────────────────────────────────────────────
+    const [
+        { data: profile },
+        { data: predictions },
+        { data: bracketPicks },
+    ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('predictions').select('*').eq('user_id', user.id),
+        supabase.from('bracket_picks').select('*').eq('user_id', user.id),
+    ])
 
     const predMap = new Map(predictions?.map(p => [p.match_id, p]) ?? [])
 
@@ -97,6 +93,11 @@ export default async function PredictPage() {
                         initialPredictions={predictions || []}
                         initialBracketPicks={bracketPicks || []}
                     >
+                        <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
+                            <LockBanner />
+                            <HowToPlay />
+                        </div>
+
                         <div style={{ width: '100%' }}>
                         
                         {/* 1. Group Stage */}
@@ -107,11 +108,7 @@ export default async function PredictPage() {
                                 return (
                                     <div id={`group-${g}`} key={g} style={{ marginBottom: 60, paddingBottom: 40, borderBottom: '1px solid var(--border)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-                                            {getFlagUrl(activeMatches[0]?.home_team ?? '') ? (
-                                                <img src={getFlagUrl(activeMatches[0]?.home_team ?? '')} alt="Group Flag" style={{ width: 60, borderRadius: 4 }} />
-                                            ) : (
-                                                <span style={{ fontSize: 40 }}>🏳️</span>
-                                            )}
+                                            <TeamFlag teamCode={activeMatches[0]?.home_team ?? ''} size={60} />
                                             <div>
                                                 <h2 style={{ fontFamily: 'Bebas Neue', fontSize: 32, lineHeight: 1 }}>Group {g}</h2>
                                             </div>
