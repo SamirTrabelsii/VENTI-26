@@ -45,6 +45,7 @@ export default async function PredictPage() {
             <div style={{ display: 'flex', paddingTop: 64, minHeight: '100vh' }}>
                 {/* Sticky Sidebar Navigation */}
                 <aside
+                    className="hidden lg:block"
                     style={{
                         width: 230,
                         flexShrink: 0,
@@ -86,8 +87,24 @@ export default async function PredictPage() {
                     </div>
                 </aside>
 
-                {/* Main Content */}
-                <main style={{ flex: 1, minWidth: 0, padding: '32px 40px' }}>
+                <div className="flex-1 flex flex-col min-w-0">
+                    {/* Mobile Quick Nav */}
+                    <div className="lg:hidden sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-[var(--border)] px-4 py-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        {groupProgress.map(({ g }) => (
+                            <a key={g} href={`#group-${g}`} className="flex-shrink-0 w-10 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
+                                {g}
+                            </a>
+                        ))}
+                        <a href="#third-place" className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
+                            3rd Place
+                        </a>
+                        <a href="#knockout" className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
+                            Bracket
+                        </a>
+                    </div>
+
+                    {/* Main Content */}
+                    <main className="flex-1 min-w-0 p-4 pb-24 md:p-8 md:pb-8">
                     <PredictionProvider
                         userId={user.id}
                         initialPredictions={predictions || []}
@@ -142,6 +159,7 @@ export default async function PredictPage() {
                         </div>
                     </PredictionProvider>
                 </main>
+                </div>
             </div>
         </div>
     )

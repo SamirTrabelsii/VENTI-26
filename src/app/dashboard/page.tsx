@@ -90,15 +90,15 @@ export default async function DashboardPage() {
                     backgroundSize: '52px 52px',
                 }} />
 
-                <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px 36px', position: 'relative' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 32, flexWrap: 'wrap' }}>
+                <div className="px-5 py-8 md:px-10 md:py-12 relative max-w-[1400px] mx-auto">
+                    <div className="flex flex-col lg:flex-row items-start justify-between gap-8 flex-wrap">
 
                         {/* Title */}
                         <div>
                             <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
                                 Welcome back, {displayName}
                             </p>
-                            <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 80, lineHeight: 0.88, color: 'var(--cream)', letterSpacing: 1 }}>
+                            <h1 className="font-display text-6xl md:text-[80px] leading-[0.88] text-cream tracking-wide">
                                 YOUR<br /><span className="gradient-text">WORLD</span><br />CUP
                             </h1>
                             <p style={{ marginTop: 14, fontSize: 15, color: 'var(--dim)', maxWidth: 380, lineHeight: 1.7 }}>
@@ -123,7 +123,7 @@ export default async function DashboardPage() {
                         </div>
 
                         {/* Countdown + progress */}
-                        <div className="glass-panel" style={{ borderRadius: 18, padding: '24px 28px', minWidth: 288, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+                        <div className="glass-panel w-full lg:w-auto min-w-[288px] relative overflow-hidden flex-shrink-0 rounded-[18px] p-6 md:p-7">
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold))' }} />
 
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 14 }}>
@@ -167,10 +167,10 @@ export default async function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-                style={{ maxWidth: 1400, margin: '0 auto', padding: '0 40px 28px' }}
+                className="max-w-[1400px] mx-auto px-5 pb-7 md:px-10 md:pb-7"
             >
                 <LockBanner />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                     {[
                         {
                             label: 'Group Predictions', accent: 'var(--gold)',
@@ -193,7 +193,7 @@ export default async function DashboardPage() {
                             sub: 'consecutive correct',
                         },
                     ].map(c => (
-                        <div key={c.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
+                        <div key={c.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: c.accent }} />
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6, paddingLeft: 12 }}>{c.label}</p>
                             <p style={{ fontFamily: 'Bebas Neue', fontSize: 40, color: 'var(--cream)', paddingLeft: 12, lineHeight: 1 }}>{c.value}</p>
@@ -204,7 +204,7 @@ export default async function DashboardPage() {
             </MotionDiv>
 
             {/* ── MAIN GRID ── */}
-            <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 40px 60px', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24 }}>
+            <div className="max-w-[1400px] mx-auto px-5 pb-16 md:px-10 md:pb-[60px] grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
 
                 {/* Left */}
                 <MotionDiv 
@@ -233,11 +233,9 @@ export default async function DashboardPage() {
                         </div>
 
                         {/* Group rules */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--border)' }}>
+                        <div className="grid grid-cols-2 md:grid-cols-4 border-b border-[var(--border)]">
                             {SCORING_REFERENCE.groupAndKnockout.map((r, i) => (
-                                <div key={r.label} style={{
-                                    padding: '16px 14px', textAlign: 'center',
-                                    borderRight: i < 3 ? '1px solid var(--border)' : 'none',
+                                <div key={r.label} className="p-4 text-center border-r border-b md:border-b-0 border-[var(--border)]" style={{
                                     background: r.pts === 25 ? 'rgba(212,168,67,0.04)' : 'transparent',
                                 }}>
                                     <div style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: r.pts === 25 ? 'var(--gold)' : 'var(--cream)', lineHeight: 1 }}>+{r.pts}</div>

@@ -55,23 +55,6 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
     const kickoff = new Date(match.kickoff)
     const dateStr = kickoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Etc/GMT-1' })
     const timeStr = kickoff.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT-1' })
-
-    const selectStyle: React.CSSProperties = {
-        background: 'var(--surface2)',
-        border: '2px solid var(--border)',
-        borderRadius: 12,
-        color: 'var(--cream)',
-        fontFamily: 'Bebas Neue, sans-serif',
-        fontSize: 38,
-        width: 72,
-        height: 72,
-        textAlign: 'center',
-        outline: 'none',
-        cursor: 'pointer',
-        appearance: 'none',
-        WebkitAppearance: 'none',
-    }
-
     return (
         <div
             style={{
@@ -126,8 +109,10 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                             const val = e.target.value === '' ? '' : Number(e.target.value)
                             handleHome(val)
                         }}
+                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none cursor-pointer appearance-none"
                         style={{
-                            ...selectStyle,
+                            borderWidth: 2,
+                            borderStyle: 'solid',
                             borderColor: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--cream)',
                         }}
@@ -148,8 +133,10 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                             const val = e.target.value === '' ? '' : Number(e.target.value)
                             handleAway(val)
                         }}
+                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none cursor-pointer appearance-none"
                         style={{
-                            ...selectStyle,
+                            borderWidth: 2,
+                            borderStyle: 'solid',
                             borderColor: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--cream)',
                         }}

@@ -301,7 +301,7 @@ export default function BracketSection() {
                 </div>
             </div>
 
-            <div style={{ overflowX: 'auto', paddingBottom: 60 }}>
+            <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>
                 <div style={{ display: 'flex', gap: 24, minWidth: 2800, padding: '0 20px', alignItems: 'stretch' }}>
                     
                     {/* LEFT WING */}
