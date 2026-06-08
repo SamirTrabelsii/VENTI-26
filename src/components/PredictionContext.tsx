@@ -3,6 +3,9 @@ import React, { createContext, useContext, useState, ReactNode, useRef, useCallb
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Prediction, BracketPick as RawBracketPick } from '@/types'
+import AuthModal from '@/components/AuthModal'
+
+const GUEST_STORAGE_KEY = 'venti26_guest_predictions'
 
 export interface BracketPick {
     team_code: string
@@ -48,7 +51,7 @@ export function PredictionProvider({
     initialBracketPicks,
     children 
 }: { 
-    userId: string
+    userId?: string | null
     initialPredictions: Prediction[]
     initialBracketPicks: BracketPick[]
     children: ReactNode 
@@ -57,6 +60,7 @@ export function PredictionProvider({
     const router = useRouter()
     const [saving, setSaving] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
     const [groupScores, setGroupScores] = useState<Record<string, { home: number | '', away: number | '', original_home: number | '', original_away: number | '', is_repredicted: boolean }>>(() => {
         const init: Record<string, { home: number | '', away: number | '', original_home: number | '', original_away: number | '', is_repredicted: boolean }> = {}
@@ -88,6 +92,63 @@ export function PredictionProvider({
         return init
     })
 
+    // Hydrate guest predictions from localStorage on mount (Guest Mode)
+    React.useEffect(() => {
+        if (!userId) {
+            try {
+                const stored = localStorage.getItem(GUEST_STORAGE_KEY)
+                if (stored) {
+                    const parsed = JSON.parse(stored)
+                    if (parsed.groupScores) setGroupScores(parsed.groupScores)
+                    if (parsed.bracketPicks) setBracketPicks(parsed.bracketPicks)
+                    if (parsed.hasUnsavedChanges) setHasUnsavedChanges(parsed.hasUnsavedChanges)
+                }
+            } catch (e) {
+                console.error('Failed to parse guest predictions', e)
+            }
+        }
+    }, [userId])
+
+    // Migrate guest predictions to authenticated user
+    React.useEffect(() => {
+        if (userId) {
+            try {
+                const stored = localStorage.getItem(GUEST_STORAGE_KEY)
+                if (stored) {
+                    const parsed = JSON.parse(stored)
+                    if (parsed.groupScores || parsed.bracketPicks) {
+                        console.log('[Migration] Migrating guest predictions to user account...')
+                        setGroupScores(prev => ({ ...prev, ...parsed.groupScores }))
+                        setBracketPicks(prev => ({ ...prev, ...parsed.bracketPicks }))
+                        setHasUnsavedChanges(true)
+                        localStorage.removeItem(GUEST_STORAGE_KEY)
+                        
+                        // We do not auto-save here because the state update needs to flush first.
+                        // The user will see 'Save All Changes' glowing, or we could trigger a save timeout.
+                        // Let's trigger a save after a short delay so the state is applied.
+                        setTimeout(() => {
+                            // We can't easily call saveAll() here because it might capture old state,
+                            // but setting hasUnsavedChanges=true is perfectly fine. The user clicks Save.
+                        }, 500)
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to migrate guest predictions', e)
+            }
+        }
+    }, [userId])
+
+    // Persist guest predictions to localStorage whenever they change
+    React.useEffect(() => {
+        if (!userId) {
+            localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({
+                groupScores,
+                bracketPicks,
+                hasUnsavedChanges
+            }))
+        }
+    }, [userId, groupScores, bracketPicks, hasUnsavedChanges])
+
     // Debounced setGroupScore: accumulate rapid changes and batch into one state update
     const pendingScores = useRef<Record<string, { home: number | '', away: number | '' }>>({})
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -118,6 +179,11 @@ export function PredictionProvider({
     }
 
     const saveAll = async () => {
+        if (!userId) {
+            setIsAuthModalOpen(true)
+            return
+        }
+
         setSaving(true)
         try {
             // 1. Prepare Group Predictions Upsert
@@ -253,6 +319,18 @@ export function PredictionProvider({
                     {saving ? 'Saving...' : 'Save All Changes'}
                 </button>
             </div>
+
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+                onSuccess={(newUserId) => {
+                    setIsAuthModalOpen(false)
+                    // Reload the page so the server re-fetches as the authenticated user.
+                    // Guest predictions are already in localStorage and the migration
+                    // useEffect will merge them into state on reload.
+                    window.location.reload()
+                }}
+            />
         </PredictionContext.Provider>
     )
 }

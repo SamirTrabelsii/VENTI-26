@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
@@ -14,7 +15,7 @@ const TABS = [
     { href: '/leaderboard', label: 'Rankings', icon: Trophy }
 ]
 
-export default function Nav({ initials = 'PL', displayName }: { initials?: string; displayName?: string }) {
+export default function Nav({ initials = 'PL', displayName, isGuest }: { initials?: string; displayName?: string; isGuest?: boolean }) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -41,10 +42,17 @@ export default function Nav({ initials = 'PL', displayName }: { initials?: strin
             >
                 {/* Logo */}
                 <div
-                    className="font-display text-2xl tracking-widest text-gold cursor-pointer"
+                    className="cursor-pointer flex items-center"
                     onClick={() => router.push('/dashboard')}
                 >
-                    VENTI<span className="text-cream opacity-40">·</span>26
+                    <img
+                        src="/images/logo.png"
+                        alt="FIFA World Cup 2026"
+                        style={{ objectFit: 'contain', height: 38, width: 'auto' }}
+                    />
+                    <span className="font-display text-xl tracking-widest text-white ml-3 hidden sm:block">
+                        VENTI<span className="text-white/40">·</span>26
+                    </span>
                 </div>
 
                 {/* Desktop Tabs */}
@@ -71,7 +79,25 @@ export default function Nav({ initials = 'PL', displayName }: { initials?: strin
                     })}
                 </div>
 
-                {/* Avatar */}
+                {/* Avatar / Sign In */}
+                {isGuest ? (
+                    <button
+                        onClick={() => router.push('/auth/login')}
+                        style={{
+                            padding: '8px 20px',
+                            borderRadius: 10,
+                            background: 'var(--gold)',
+                            color: '#0a0a0a',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: 'DM Sans, sans-serif',
+                        }}
+                    >
+                        Sign In
+                    </button>
+                ) : (
                 <div style={{ position: 'relative' }}>
                     <img
                         src={getRobohashUrl(avatarSeed, 80)}
@@ -115,6 +141,7 @@ export default function Nav({ initials = 'PL', displayName }: { initials?: strin
                         </div>
                     )}
                 </div>
+                )}
             </nav>
 
             {/* Mobile Bottom Navigation */}

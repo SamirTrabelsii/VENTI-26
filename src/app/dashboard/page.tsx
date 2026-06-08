@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { GROUP_MATCHES } from '@/lib/wc2026-data'
 import Link from 'next/link'
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import Nav from '@/components/Nav'
 import LiveMatches from '@/components/LiveMatches'
@@ -16,36 +17,49 @@ export default async function DashboardPage() {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/auth/login')
-
-    // ── Parallel DB fetch (no more waterfall) ─────────────────────────────────
-    const [
-        { data: profile },
-        { data: myGroups },
-        { data: preds, count: predCount },
-        { count: bracketCount },
-    ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('group_members').select('group_id, groups(id, name, description)').eq('user_id', user.id).limit(3),
-        supabase.from('predictions').select('*', { count: 'exact' }).eq('user_id', user.id),
-        supabase.from('bracket_picks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    ])
-
-    const firstGroupId = myGroups?.[0]?.group_id ?? null
-    const firstGroupName = (myGroups?.[0]?.groups as unknown as { name: string })?.name ?? null
-
+    // ── DB Fetch (Graceful for Guests) ────────────────────────────────────────
+    let profile = null
+    let myGroups: any[] = []
+    let preds: any[] = []
+    let predCount = 0
+    let bracketCount = 0
     let scores: Score[] = []
     let myScore: Score | null = null
+    let firstGroupId: string | null = null
+    let firstGroupName: string | null = null
 
-    if (firstGroupId) {
-        const { data } = await supabase
-            .from('scores')
-            .select('*, profile:profiles(display_name, avatar_initials, avatar_color, email)')
-            .eq('group_id', firstGroupId)
-            .order('total_points', { ascending: false })
-            .limit(10)
-        scores = data ?? []
-        myScore = scores.find(s => s.user_id === user.id) ?? null
+    if (user) {
+        const [
+            { data: pData },
+            { data: mgData },
+            { data: pRows, count: pCount },
+            { count: bCount },
+        ] = await Promise.all([
+            supabase.from('profiles').select('*').eq('id', user.id).single(),
+            supabase.from('group_members').select('group_id, groups(id, name, description)').eq('user_id', user.id).limit(3),
+            supabase.from('predictions').select('*', { count: 'exact' }).eq('user_id', user.id),
+            supabase.from('bracket_picks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+        ])
+        
+        profile = pData
+        myGroups = mgData || []
+        preds = pRows || []
+        predCount = pCount || 0
+        bracketCount = bCount || 0
+
+        firstGroupId = myGroups?.[0]?.group_id ?? null
+        firstGroupName = (myGroups?.[0]?.groups as unknown as { name: string })?.name ?? null
+
+        if (firstGroupId) {
+            const { data } = await supabase
+                .from('scores')
+                .select('*, profile:profiles(display_name, avatar_initials, avatar_color, email)')
+                .eq('group_id', firstGroupId)
+                .order('total_points', { ascending: false })
+                .limit(10)
+            scores = data ?? []
+            myScore = scores.find(s => s.user_id === user.id) ?? null
+        }
     }
 
     // ── Countdown ──────────────────────────────────────────────────────────────
@@ -63,15 +77,16 @@ export default async function DashboardPage() {
     const groupPct = Math.min(100, Math.round((groupPreds / groupTotal) * 100))
 
     // ── My rank in first group ─────────────────────────────────────────────────
-    const myRank = myScore
+    const myRank = myScore && user
         ? scores.findIndex(s => s.user_id === user.id) + 1
         : null
 
-    const displayName = profile?.display_name ?? profile?.email ?? 'Player'
+    const isGuest = !user
+    const displayName = profile?.display_name ?? profile?.email ?? (isGuest ? 'Explorer' : 'Player')
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
-            <Nav initials={profile?.avatar_initials ?? 'PL'} displayName={displayName} />
+            <Nav initials={profile?.avatar_initials ?? 'PL'} displayName={displayName} isGuest={isGuest} />
 
             {/* ── HERO ── */}
             <MotionDiv 
@@ -80,6 +95,11 @@ export default async function DashboardPage() {
                 transition={{ duration: 0.8, ease: "easeOut" }}
                 style={{ position: 'relative', overflow: 'hidden', paddingTop: 64 }}
             >
+                {/* Immersive Dark Background */}
+                <div className="absolute inset-0 pointer-events-none -z-10">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[var(--black)] to-[var(--black)]" />
+                </div>
+
                 <div style={{
                     position: 'absolute', inset: 0, pointerEvents: 'none',
                     background: 'radial-gradient(ellipse 80% 50% at 50% -5%, rgba(212,168,67,0.15) 0%, transparent 70%)',
@@ -94,7 +114,7 @@ export default async function DashboardPage() {
                     <div className="flex flex-col lg:flex-row items-start justify-between gap-8 flex-wrap">
 
                         {/* Title */}
-                        <div>
+                        <div className="flex-1 min-w-[300px]">
                             <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
                                 Welcome back, {displayName}
                             </p>
@@ -122,8 +142,20 @@ export default async function DashboardPage() {
                             </div>
                         </div>
 
+                        {/* Trophy Visual */}
+                        <div className="hidden lg:block relative flex-shrink-0 w-[240px] h-[300px] -mt-10 opacity-90 drop-shadow-[0_0_40px_rgba(212,168,67,0.3)]">
+                            <Image
+                                src="/images/trophy.png"
+                                alt="World Cup Trophy"
+                                fill
+                                sizes="(max-width: 1024px) 100vw, 240px"
+                                style={{ objectFit: 'contain' }}
+                                priority
+                            />
+                        </div>
+
                         {/* Countdown + progress */}
-                        <div className="glass-panel w-full lg:w-auto min-w-[288px] relative overflow-hidden flex-shrink-0 rounded-[18px] p-6 md:p-7">
+                        <div className="glass-panel w-full lg:w-auto min-w-[288px] relative overflow-hidden flex-shrink-0 rounded-[18px] p-6 md:p-7 z-10">
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold))' }} />
 
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 14 }}>
@@ -193,7 +225,8 @@ export default async function DashboardPage() {
                             sub: 'consecutive correct',
                         },
                     ].map(c => (
-                        <div key={c.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
+                        <div key={c.label} className="relative overflow-hidden rounded-[14px] p-[14px] md:p-4 border border-[var(--border)] bg-[var(--surface)] shadow-lg transition-transform hover:-translate-y-1">
+                            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${c.accent}, transparent 70%)` }} />
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: c.accent }} />
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6, paddingLeft: 12 }}>{c.label}</p>
                             <p style={{ fontFamily: 'Bebas Neue', fontSize: 40, color: 'var(--cream)', paddingLeft: 12, lineHeight: 1 }}>{c.value}</p>
@@ -220,17 +253,22 @@ export default async function DashboardPage() {
                     ]} />
 
                     {/* Live matches */}
-                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 24 }}>
-                        <LiveMatches predictions={preds ?? []} />
+                    <div className="relative overflow-hidden rounded-[18px] p-6 border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+                        <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ background: 'radial-gradient(circle at center, var(--gold), transparent 80%)' }} />
+                        <div className="relative z-10">
+                            <LiveMatches predictions={preds ?? []} />
+                        </div>
                     </div>
 
                     {/* Scoring formula — inline, no separate component needed */}
-                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden' }}>
-                        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 16 }}>📐</span>
-                            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--cream)' }}>Points Formula</span>
-                            <Link href="/insights" style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--gold)', textDecoration: 'none' }}>Full details →</Link>
-                        </div>
+                    <div className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+                        <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ background: 'radial-gradient(circle at bottom right, var(--gold), transparent 80%)' }} />
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-4">
+                                <span className="text-base">📐</span>
+                                <span className="text-[11px] font-semibold tracking-[1.5px] uppercase text-cream">Points Formula</span>
+                                <Link href="/insights" className="ml-auto text-xs text-gold no-underline">Full details →</Link>
+                            </div>
 
                         {/* Group rules */}
                         <div className="grid grid-cols-2 md:grid-cols-4 border-b border-[var(--border)]">
@@ -260,6 +298,7 @@ export default async function DashboardPage() {
                                 Max/match: <strong style={{ color: 'var(--gold)' }}>35 pts</strong>
                             </span>
                         </div>
+                    </div>
                     </div>
 
                 </MotionDiv>

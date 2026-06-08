@@ -1435,8 +1435,12 @@ export function getFlagUrl(teamCode: string): string | undefined {
     // For TBD or non-iso2, we can just return undefined or a generic flag
     if (t.iso2 === '🏳️' || t.iso2 === '') return undefined
     
-    // England uses gb-eng in flagcdn
-    const iso2 = t.iso2 === 'eng' ? 'gb-eng' : t.iso2
+    // Handle home nations for flagcdn
+    let iso2 = t.iso2
+    if (t.iso2 === 'eng') iso2 = 'gb-eng'
+    if (t.iso2 === 'sco') iso2 = 'gb-sct'
+    if (t.iso2 === 'wal') iso2 = 'gb-wls'
+    
     return "https://flagcdn.com/w80/" + iso2 + ".png"
 }
 

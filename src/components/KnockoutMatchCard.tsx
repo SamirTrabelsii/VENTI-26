@@ -11,7 +11,6 @@ interface KnockoutMatchCardProps {
     onChange: (matchId: string, home: number | '', away: number | '', advancing: string | null) => void
 }
 
-const SCORE_OPTIONS = Array.from({ length: 11 }, (_, i) => i) // 0–10
 
 export default function KnockoutMatchCard({
     matchId,
@@ -112,27 +111,30 @@ export default function KnockoutMatchCard({
                     {homeTeam ? homeTeam.name : homeCode}
                 </span>
 
-                <select
-                    value={homeScore}
+                <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={20}
+                    value={homeScore === '' ? '' : homeScore}
+                    placeholder="–"
                     onChange={e => {
-                        const val = e.target.value === '' ? '' : Number(e.target.value)
-                        handleHomeChange(val)
+                        const raw = e.target.value
+                        if (raw === '') { handleHomeChange(''); return }
+                        const n = parseInt(raw, 10)
+                        if (!isNaN(n) && n >= 0 && n <= 20) handleHomeChange(n)
                     }}
+                    onFocus={e => e.target.select()}
                     disabled={isHomeTBD || isAwayTBD}
                     style={{
                         ...selectStyle,
                         borderColor: (homeScore !== '' && homeScore > 0) ? 'var(--gold)' : 'var(--border)',
                         color: (homeScore !== '' && homeScore > 0) ? 'var(--gold)' : 'var(--cream)',
                         opacity: (isHomeTBD || isAwayTBD) ? 0.4 : 1,
+                        MozAppearance: 'textfield',
+                        WebkitAppearance: 'none',
                     }}
-                >
-                    <option value="" style={{ background: '#1c1c1c', fontSize: 14 }}>—</option>
-                    {SCORE_OPTIONS.map(n => (
-                        <option key={n} value={n} style={{ background: '#1c1c1c', fontSize: 14 }}>
-                            {n}
-                        </option>
-                    ))}
-                </select>
+                />
             </div>
 
             {/* Away team row */}
@@ -155,27 +157,30 @@ export default function KnockoutMatchCard({
                     {awayTeam ? awayTeam.name : awayCode}
                 </span>
 
-                <select
-                    value={awayScore}
+                <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={20}
+                    value={awayScore === '' ? '' : awayScore}
+                    placeholder="–"
                     onChange={e => {
-                        const val = e.target.value === '' ? '' : Number(e.target.value)
-                        handleAwayChange(val)
+                        const raw = e.target.value
+                        if (raw === '') { handleAwayChange(''); return }
+                        const n = parseInt(raw, 10)
+                        if (!isNaN(n) && n >= 0 && n <= 20) handleAwayChange(n)
                     }}
+                    onFocus={e => e.target.select()}
                     disabled={isHomeTBD || isAwayTBD}
                     style={{
                         ...selectStyle,
                         borderColor: (awayScore !== '' && awayScore > 0) ? 'var(--gold)' : 'var(--border)',
                         color: (awayScore !== '' && awayScore > 0) ? 'var(--gold)' : 'var(--cream)',
                         opacity: (isHomeTBD || isAwayTBD) ? 0.4 : 1,
+                        MozAppearance: 'textfield',
+                        WebkitAppearance: 'none',
                     }}
-                >
-                    <option value="" style={{ background: '#1c1c1c', fontSize: 14 }}>—</option>
-                    {SCORE_OPTIONS.map(n => (
-                        <option key={n} value={n} style={{ background: '#1c1c1c', fontSize: 14 }}>
-                            {n}
-                        </option>
-                    ))}
-                </select>
+                />
             </div>
 
             {/* Tie-breaker UI */}

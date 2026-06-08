@@ -12,13 +12,16 @@ const nextConfig = {
                 protocol: "https",
                 hostname: "robohash.org",
             },
+            {
+                protocol: "https",
+                hostname: "upload.wikimedia.org",
+            },
+            {
+                protocol: "https",
+                hostname: "images.unsplash.com",
+            },
         ],
         formats: ["image/webp", "image/avif"],
-    },
-
-    // ✅ TEMP FIX: allow deployment even if ESLint / TS has errors
-    eslint: {
-        ignoreDuringBuilds: true,
     },
 
     typescript: {

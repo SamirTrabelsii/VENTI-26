@@ -25,10 +25,12 @@ export default async function LeaderboardPage() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) redirect('/auth/login')
-
-    const { data: profile } = await supabase
-        .from('profiles').select('*').eq('id', user.id).single()
+    let profile = null
+    if (user) {
+        const { data: profileData } = await supabase
+            .from('profiles').select('*').eq('id', user.id).single()
+        profile = profileData
+    }
 
     // 1. Fetch ALL registered users
     const { data: allProfiles } = await supabase
@@ -105,7 +107,7 @@ export default async function LeaderboardPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
-            <Nav initials={initials} />
+            <Nav initials={initials} isGuest={!user} />
 
             <div style={{ maxWidth: 1000, margin: '0 auto', padding: '100px 40px 60px' }}>
                 <div style={{ marginBottom: 40, textAlign: 'center' }}>
@@ -145,7 +147,7 @@ export default async function LeaderboardPage() {
                         </div>
                     ) : (
                         leaderboard.map((row, index) => {
-                            const isMe = row.id === user.id
+                            const isMe = user && row.id === user.id
                             const progressPct = Math.round((row.total_preds / TOTAL_MATCHES) * 100)
 
                             // Progress status

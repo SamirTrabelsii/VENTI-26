@@ -13,18 +13,25 @@ import TeamFlag from '@/components/TeamFlag'
 export default async function PredictPage() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/auth/login')
+    // ── DB Fetch (Graceful for Guests) ────────────────────────────────────────
+    let profile = null
+    let predictions: any[] = []
+    let bracketPicks: any[] = []
 
-    // ── Parallel DB fetch ─────────────────────────────────────────────────────
-    const [
-        { data: profile },
-        { data: predictions },
-        { data: bracketPicks },
-    ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('predictions').select('*').eq('user_id', user.id),
-        supabase.from('bracket_picks').select('*').eq('user_id', user.id),
-    ])
+    if (user) {
+        const [
+            { data: pData },
+            { data: predsData },
+            { data: picksData },
+        ] = await Promise.all([
+            supabase.from('profiles').select('*').eq('id', user.id).single(),
+            supabase.from('predictions').select('*').eq('user_id', user.id),
+            supabase.from('bracket_picks').select('*').eq('user_id', user.id),
+        ])
+        profile = pData
+        predictions = predsData || []
+        bracketPicks = picksData || []
+    }
 
     const predMap = new Map(predictions?.map(p => [p.match_id, p]) ?? [])
 
@@ -40,7 +47,7 @@ export default async function PredictPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
-            <Nav initials={profile?.avatar_initials ?? 'PL'} />
+            <Nav initials={profile?.avatar_initials ?? 'PL'} isGuest={!user} />
 
             <div style={{ display: 'flex', paddingTop: 64, minHeight: '100vh' }}>
                 {/* Sticky Sidebar Navigation */}
@@ -106,9 +113,9 @@ export default async function PredictPage() {
                     {/* Main Content */}
                     <main className="flex-1 min-w-0 p-4 pb-24 md:p-8 md:pb-8">
                     <PredictionProvider
-                        userId={user.id}
-                        initialPredictions={predictions || []}
-                        initialBracketPicks={bracketPicks || []}
+                        userId={user?.id || null}
+                        initialPredictions={predictions ?? []}
+                        initialBracketPicks={bracketPicks ?? []}
                     >
                         <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
                             <LockBanner />
@@ -133,7 +140,7 @@ export default async function PredictPage() {
                                         <GroupPredictions
                                             activeMatches={activeMatches}
                                             predictions={predictions || []}
-                                            userId={user.id}
+                                            userId={user?.id ?? ''}
                                             nextGroup={null}
                                         />
                                     </div>

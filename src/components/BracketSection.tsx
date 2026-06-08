@@ -334,7 +334,7 @@ export default function BracketSection() {
                             {championTeam ? (
                                 <>
                                     <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
-                                        <TeamFlag teamCode={championTeam.code} size={90} style={{ height: 65 }} />
+                                        <TeamFlag teamCode={championTeam.code} size={90} style={{ height: 65, width: 'auto' }} />
                                     </div>
                                     <div style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: 'var(--cream)', lineHeight: 1 }}>
                                         {championTeam.name}

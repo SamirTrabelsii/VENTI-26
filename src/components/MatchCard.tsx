@@ -17,7 +17,7 @@ interface Props {
     hideSaveButton?: boolean
 }
 
-const SCORE_OPTIONS = Array.from({ length: 11 }, (_, i) => i) // 0–10
+
 
 export default function MatchCard({ match, prediction, userId, onSaved, localHome, localAway, onChange, hideSaveButton }: Props) {
     const defaultHome = prediction?.home_score ?? ''
@@ -101,53 +101,59 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                     </div>
                 </div>
 
-                {/* Score selectors */}
+                {/* Score inputs */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                    <select
-                        value={home}
+                    <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={20}
+                        value={home === '' ? '' : home}
+                        placeholder="–"
                         onChange={e => {
-                            const val = e.target.value === '' ? '' : Number(e.target.value)
-                            handleHome(val)
+                            const raw = e.target.value
+                            if (raw === '') { handleHome(''); return }
+                            const n = parseInt(raw, 10)
+                            if (!isNaN(n) && n >= 0 && n <= 20) handleHome(n)
                         }}
-                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none cursor-pointer appearance-none"
+                        onFocus={e => e.target.select()}
+                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none"
                         style={{
                             borderWidth: 2,
                             borderStyle: 'solid',
                             borderColor: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--cream)',
+                            MozAppearance: 'textfield',
+                            WebkitAppearance: 'none',
                         }}
-                    >
-                        <option value="" style={{ background: '#1c1c1c', fontSize: 16 }}>—</option>
-                        {SCORE_OPTIONS.map(n => (
-                            <option key={n} value={n} style={{ background: '#1c1c1c', fontSize: 16 }}>
-                                {n}
-                            </option>
-                        ))}
-                    </select>
+                    />
 
                     <span style={{ fontFamily: 'Bebas Neue', fontSize: 28, color: 'var(--muted)' }}>—</span>
 
-                    <select
-                        value={away}
+                    <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={20}
+                        value={away === '' ? '' : away}
+                        placeholder="–"
                         onChange={e => {
-                            const val = e.target.value === '' ? '' : Number(e.target.value)
-                            handleAway(val)
+                            const raw = e.target.value
+                            if (raw === '') { handleAway(''); return }
+                            const n = parseInt(raw, 10)
+                            if (!isNaN(n) && n >= 0 && n <= 20) handleAway(n)
                         }}
-                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none cursor-pointer appearance-none"
+                        onFocus={e => e.target.select()}
+                        className="bg-surface2 rounded-xl text-cream font-display text-3xl md:text-[38px] w-[52px] h-[56px] md:w-[72px] md:h-[72px] text-center outline-none"
                         style={{
                             borderWidth: 2,
                             borderStyle: 'solid',
                             borderColor: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--cream)',
+                            MozAppearance: 'textfield',
+                            WebkitAppearance: 'none',
                         }}
-                    >
-                        <option value="" style={{ background: '#1c1c1c', fontSize: 16 }}>—</option>
-                        {SCORE_OPTIONS.map(n => (
-                            <option key={n} value={n} style={{ background: '#1c1c1c', fontSize: 16 }}>
-                                {n}
-                            </option>
-                        ))}
-                    </select>
+                    />
                 </div>
 
                 {/* Away team */}
