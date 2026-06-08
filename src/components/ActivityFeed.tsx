@@ -24,7 +24,7 @@ interface Props {
 // and merging with recent static history fetched on mount
 export default function ActivityFeed({ groupId, userId }: Props) {
     const [items, setItems] = useState<ActivityItem[]>([])
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     useEffect(() => {
         // Load recent predictions as activity

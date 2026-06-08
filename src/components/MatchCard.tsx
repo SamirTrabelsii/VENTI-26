@@ -28,7 +28,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
     const [dirty, setDirty] = useState(false)
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(!!prediction)
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     const handleHome = (v: number | '') => { 
         if (onChange) onChange(v, away)

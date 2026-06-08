@@ -18,7 +18,7 @@ const TABS = [
 export default function Nav({ initials = 'PL', displayName, isGuest }: { initials?: string; displayName?: string; isGuest?: boolean }) {
     const pathname = usePathname()
     const router = useRouter()
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
     const [menuOpen, setMenuOpen] = useState(false)
 
     const handleSignOut = async () => {

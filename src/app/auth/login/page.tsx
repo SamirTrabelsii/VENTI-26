@@ -12,7 +12,7 @@ export default function LoginPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const router = useRouter()
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     // We use email = username@venti26.app internally so Supabase is happy
     // The user only ever sees and types a username

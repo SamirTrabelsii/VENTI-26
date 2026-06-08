@@ -21,7 +21,7 @@ export default function TeamFlag({ teamCode, size = 32, style }: Props) {
             alt={teamCode}
             width={size}
             height={Math.round(size * 0.6)}
-            style={{ borderRadius: 2, objectFit: 'cover', width: 'auto', height: 'auto', ...style }}
+            style={{ borderRadius: 2, objectFit: 'cover', width: style?.width || size, height: style?.height || Math.round(size * 0.6), ...style }}
             unoptimized={false}
         />
     )

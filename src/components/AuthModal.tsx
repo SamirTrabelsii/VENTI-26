@@ -21,7 +21,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, title, subtitle 
     const [loading, setLoading] = useState(false)
     
     const router = useRouter()
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     if (!isOpen) return null
 

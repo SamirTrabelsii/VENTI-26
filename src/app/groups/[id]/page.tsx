@@ -47,7 +47,7 @@ export default function GroupDetailPage() {
     const params = useParams()
     const id = params.id as string
     const router = useRouter()
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     const [group, setGroup] = useState<GroupData | null>(null)
     const [scores, setScores] = useState<MemberScore[]>([])

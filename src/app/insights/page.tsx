@@ -140,7 +140,7 @@ const DNA_PROFILES = [
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function InsightsPage() {
     const router = useRouter()
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     const [profile, setProfile] = useState<any>(null)
     const [predCount, setPredCount] = useState(0)

@@ -95,7 +95,7 @@ export default function GroupsPage() {
     const [joinError, setJoinError] = useState('')
     const [loading, setLoading] = useState(false)
     const [pageLoading, setPageLoading] = useState(true)
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
     const router = useRouter()
 
     const loadGroups = useCallback(async (uid: string) => {

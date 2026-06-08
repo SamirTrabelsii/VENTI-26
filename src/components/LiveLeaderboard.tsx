@@ -14,7 +14,7 @@ export default function LiveLeaderboard({ groupId, currentUserId, initialScores 
     const [scores, setScores] = useState<Score[]>(initialScores)
     const [prevScores, setPrevScores] = useState<Record<string, number>>({})
     const [justUpdated, setJustUpdated] = useState<string | null>(null)
-    const supabase = createClient()
+    const [supabase] = useState(() => createClient())
 
     useEffect(() => {
         // Load fresh scores

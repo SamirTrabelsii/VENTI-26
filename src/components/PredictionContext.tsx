@@ -56,7 +56,7 @@ export function PredictionProvider({
     initialBracketPicks: BracketPick[]
     children: ReactNode 
 }) {
-    const supabase = createClient()
+    const [supabase] = React.useState(() => createClient())
     const router = useRouter()
     const [saving, setSaving] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
