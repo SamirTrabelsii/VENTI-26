@@ -119,24 +119,34 @@ export default async function DashboardPage() {
                                 Welcome back, {displayName}
                             </p>
                             <h1 className="font-display text-6xl md:text-[80px] leading-[0.88] text-cream tracking-wide">
-                                YOUR<br /><span className="gradient-text">WORLD</span><br />CUP
+                                PREDICT.<br /><span className="gradient-text">COMPETE.</span><br />CONQUER.
                             </h1>
                             <p style={{ marginTop: 14, fontSize: 15, color: 'var(--dim)', maxWidth: 380, lineHeight: 1.7 }}>
-                                {groupPreds === 0
-                                    ? 'The tournament kicks off June 11. Start predicting to compete!'
-                                    : `${groupPreds} of ${groupTotal} group matches predicted. ${bracketPreds > 0 ? `Bracket: ${bracketPreds} picks.` : 'Build your bracket to earn more points.'}`
-                                }
+                                Lock in your group stage scores, build your knockout bracket, and climb the global leaderboards.
                             </p>
-                            <div style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                <Link href="/predict" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14 }}>
-                                    {groupPreds === 0 ? 'Start Predicting →' : 'Continue Predicting →'}
-                                </Link>
-                                {bracketPreds === 0 && (
-                                    <Link href="/bracket" style={{ padding: '13px 20px', borderRadius: 12, textDecoration: 'none', background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: 14, fontWeight: 500 }}>
-                                        Build Bracket →
+                            <div style={{ marginTop: 24, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                {groupPreds === 0 && (
+                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}>
+                                        Start Predicting →
                                     </Link>
                                 )}
-                                <Link href="/groups" style={{ padding: '13px 20px', borderRadius: 12, textDecoration: 'none', background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: 14, fontWeight: 500 }}>
+                                {groupPreds > 0 && groupPreds < groupTotal && (
+                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}>
+                                        Continue Predicting →
+                                    </Link>
+                                )}
+                                {groupPreds === groupTotal && bracketPreds === 0 && (
+                                    <Link href="/bracket" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s', boxShadow: '0 0 15px rgba(212,168,67,0.4)' }}>
+                                        Build Knockout Bracket →
+                                    </Link>
+                                )}
+                                {groupPreds === groupTotal && bracketPreds > 0 && (
+                                    <Link href="/predict" className="bg-[var(--surface2)] hover:bg-[var(--surface3)]" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontWeight: 500, fontSize: 14, transition: 'all 0.2s' }}>
+                                        Review Predictions
+                                    </Link>
+                                )}
+                                
+                                <Link href="/groups" className="bg-[var(--surface2)] hover:bg-[var(--surface3)]" style={{ padding: '13px 20px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: 14, fontWeight: 500, transition: 'all 0.2s' }}>
                                     Invite Friends
                                 </Link>
                             </div>
@@ -205,28 +215,28 @@ export default async function DashboardPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                     {[
                         {
-                            label: 'Group Predictions', accent: 'var(--gold)',
-                            value: groupPreds,
-                            sub: `${groupTotal - groupPreds} remaining`,
+                            label: 'Completion Status', accent: 'var(--gold)',
+                            value: groupPreds === groupTotal && bracketPreds > 0 ? '100%' : `${Math.round(((groupPreds + (bracketPreds > 0 ? 15 : 0)) / (groupTotal + 15)) * 100)}%`,
+                            sub: `${groupPreds}/${groupTotal} groups · ${bracketPreds > 0 ? 'Bracket done' : 'No bracket'}`,
                         },
                         {
-                            label: 'My Best Rank', accent: 'var(--green-bright)',
-                            value: myRank ? `#${myRank}` : '—',
-                            sub: firstGroupName ? `in ${firstGroupName}` : 'Join a group',
+                            label: 'My Leagues', accent: 'var(--green-bright)',
+                            value: myGroups.length,
+                            sub: firstGroupName ? `Best Rank: #${myRank ?? '—'} in ${firstGroupName}` : 'You are not in any leagues',
                         },
                         {
                             label: 'Total Points', accent: 'var(--blue-accent)',
                             value: myScore?.total_points ?? 0,
-                            sub: `${myScore?.exact_scores ?? 0} exact · ${myScore?.correct_results ?? 0} correct`,
+                            sub: 'Awaiting Kickoff',
                         },
                         {
-                            label: 'Hot Streak', accent: '#e05c4a',
-                            value: `${myScore?.streak ?? 0}${(myScore?.streak ?? 0) > 0 ? ' 🔥' : ''}`,
-                            sub: 'consecutive correct',
+                            label: 'Accuracy', accent: '#a855f7',
+                            value: '— %',
+                            sub: 'Tournament starts June 11',
                         },
                     ].map(c => (
-                        <div key={c.label} className="relative overflow-hidden rounded-[14px] p-[14px] md:p-4 border border-[var(--border)] bg-[var(--surface)] shadow-lg transition-transform hover:-translate-y-1">
-                            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${c.accent}, transparent 70%)` }} />
+                        <div key={c.label} className="relative overflow-hidden rounded-[14px] p-[14px] md:p-4 border border-[var(--border)] glass-panel transition-transform hover:-translate-y-1">
+                            <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${c.accent}, transparent 70%)` }} />
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: c.accent }} />
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6, paddingLeft: 12 }}>{c.label}</p>
                             <p style={{ fontFamily: 'Bebas Neue', fontSize: 40, color: 'var(--cream)', paddingLeft: 12, lineHeight: 1 }}>{c.value}</p>
@@ -325,7 +335,7 @@ export default async function DashboardPage() {
                             <Link href="/groups" style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none' }}>All groups →</Link>
                         </div>
 
-                        {firstGroupId ? (
+                        {firstGroupId && user ? (
                             <LiveLeaderboard groupId={firstGroupId} currentUserId={user.id} initialScores={scores} />
                         ) : (
                             <div style={{ padding: '32px 20px', textAlign: 'center' }}>

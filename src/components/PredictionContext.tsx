@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Prediction, BracketPick as RawBracketPick } from '@/types'
 import AuthModal from '@/components/AuthModal'
+import { isGlobalLockPassed } from '@/lib/wc2026-data'
 
 const GUEST_STORAGE_KEY = 'venti26_guest_predictions'
 
@@ -75,6 +76,7 @@ export function PredictionProvider({
         })
         return init
     })
+    const groupScoresRef = useRef(groupScores)
 
     const [bracketPicks, setBracketPicks] = useState<Record<string, BracketPickData>>(() => {
         const init: Record<string, BracketPickData> = {}
@@ -91,6 +93,10 @@ export function PredictionProvider({
         })
         return init
     })
+
+    React.useEffect(() => {
+        groupScoresRef.current = groupScores
+    }, [groupScores])
 
     // Hydrate guest predictions from localStorage on mount (Guest Mode)
     React.useEffect(() => {
@@ -149,28 +155,26 @@ export function PredictionProvider({
         }
     }, [userId, groupScores, bracketPicks, hasUnsavedChanges])
 
-    // Debounced setGroupScore: accumulate rapid changes and batch into one state update
-    const pendingScores = useRef<Record<string, { home: number | '', away: number | '' }>>({})
-    const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
     const setGroupScore = useCallback((matchId: string, home: number | '', away: number | '') => {
-        // Immediately update the pending ref (no re-render)
-        pendingScores.current[matchId] = { home, away }
         setHasUnsavedChanges(true)
 
-        // Debounce: flush all pending changes to React state after 250ms of inactivity
-        if (debounceTimer.current) clearTimeout(debounceTimer.current)
-        debounceTimer.current = setTimeout(() => {
-            const pending = { ...pendingScores.current }
-            pendingScores.current = {}
-            setGroupScores(prev => {
-                const next = { ...prev }
-                for (const [id, scores] of Object.entries(pending)) {
-                    next[id] = { ...prev[id], ...scores }
+        setGroupScores(prev => {
+            const existing = prev[matchId]
+            const shouldUpdateOriginal = !isGlobalLockPassed()
+            const next = {
+                ...prev,
+                [matchId]: {
+                    home,
+                    away,
+                    original_home: shouldUpdateOriginal ? home : existing?.original_home ?? home,
+                    original_away: shouldUpdateOriginal ? away : existing?.original_away ?? away,
+                    is_repredicted: existing?.is_repredicted ?? false,
                 }
-                return next
-            })
-        }, 250)
+            }
+
+            groupScoresRef.current = next
+            return next
+        })
     }, [])
 
     const setBracketPick = (key: string, data: BracketPickData) => {
@@ -187,9 +191,11 @@ export function PredictionProvider({
         setSaving(true)
         try {
             // 1. Prepare Group Predictions Upsert
-            const groupUpserts = Object.keys(groupScores)
+            const currentGroupScores = groupScoresRef.current
+
+            const groupUpserts = Object.keys(currentGroupScores)
                 .filter(matchId => {
-                    const s = groupScores[matchId]
+                    const s = currentGroupScores[matchId]
                     return (
                         s &&
                         s.home !== null &&
@@ -203,8 +209,8 @@ export function PredictionProvider({
                 .map(matchId => ({
                     user_id: userId,
                     match_id: matchId,
-                    home_score: Number(groupScores[matchId].home),
-                    away_score: Number(groupScores[matchId].away),
+                    home_score: Number(currentGroupScores[matchId].home),
+                    away_score: Number(currentGroupScores[matchId].away),
                 }))
 
             // 2. Prepare Bracket Picks Upsert

@@ -97,6 +97,7 @@ export default function MatchModal({
     const htA = match.score.halfTime.away
     const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED'
     const isFinished = match.status === 'FINISHED'
+    const hasPrediction = prediction != null
 
     const safeGoals = match.goals || []
     const homeGoals = safeGoals.filter(g => g.team.name === match.homeTeam.name)
@@ -396,7 +397,7 @@ export default function MatchModal({
                     borderTop: '1px solid var(--border)',
                     display: 'flex', gap: 10,
                 }}>
-                {(!isFinished && !isLive) && (
+                {(!isFinished && !isLive && !hasPrediction) && (
                     <a
                         href="/predict"
                         style={{

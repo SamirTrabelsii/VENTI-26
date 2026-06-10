@@ -1406,6 +1406,19 @@ export const KNOCKOUT_MATCHES: MatchData[] = [
         "city": "Atlanta, United States"
     },
     {
+        "id": "third_place",
+        "api_id": "103",
+        "group_label": "3RD",
+        "match_number": 103,
+        "home_team": "Loser Match 101",
+        "away_team": "Loser Match 102",
+        "home_flag": "🏳️",
+        "away_flag": "🏳️",
+        "kickoff": "2026-07-18T15:00:00.000Z",
+        "venue": "Hard Rock Stadium",
+        "city": "Miami (Miami Gardens), United States"
+    },
+    {
         "id": "final",
         "api_id": "104",
         "group_label": "FINAL",

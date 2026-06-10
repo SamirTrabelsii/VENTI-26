@@ -1,12 +1,11 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { getTeam, MatchData } from '@/lib/wc2026-data'
-import type { Prediction } from '@/types'
 import TeamFlag from '@/components/TeamFlag'
+import { usePredictions } from '@/components/PredictionContext'
 
 interface Props {
-    predictions: Prediction[]
     groupMatches: MatchData[]
 }
 
@@ -23,75 +22,79 @@ interface TeamStats {
     gd?: number
 }
 
-const ThirdPlaceTable = memo(function ThirdPlaceTable({ predictions, groupMatches }: Props) {
-    const teams: Record<string, TeamStats> = {}
+const ThirdPlaceTable = memo(function ThirdPlaceTable({ groupMatches }: Props) {
+    const { groupScores } = usePredictions()
 
-    // Initialize all teams
-    groupMatches.forEach(m => {
-        if (!teams[m.home_team]) teams[m.home_team] = { code: m.home_team, group: m.group_label, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }
-        if (!teams[m.away_team]) teams[m.away_team] = { code: m.away_team, group: m.group_label, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }
-    })
+    const thirdPlaced = useMemo(() => {
+        const teams: Record<string, TeamStats> = {}
 
-    const predMap = new Map(predictions.map(p => [p.match_id, p]))
+        // Initialize all teams
+        groupMatches.forEach(m => {
+            if (!teams[m.home_team]) teams[m.home_team] = { code: m.home_team, group: m.group_label, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }
+            if (!teams[m.away_team]) teams[m.away_team] = { code: m.away_team, group: m.group_label, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }
+        })
 
-    groupMatches.forEach(m => {
-        const p = predMap.get(m.id)
-        if (!p) return // Only count matches with predictions
+        groupMatches.forEach(m => {
+            const score = groupScores[m.id]
+            if (!score || score.home === '' || score.away === '') return
 
-        const home = p.home_score ?? 0
-        const away = p.away_score ?? 0
+            const home = score.home
+            const away = score.away
 
-        teams[m.home_team].p += 1
-        teams[m.away_team].p += 1
-        teams[m.home_team].gf += home
-        teams[m.home_team].ga += away
-        teams[m.away_team].gf += away
-        teams[m.away_team].ga += home
+            teams[m.home_team].p += 1
+            teams[m.away_team].p += 1
+            teams[m.home_team].gf += home
+            teams[m.home_team].ga += away
+            teams[m.away_team].gf += away
+            teams[m.away_team].ga += home
 
-        if (home > away) {
-            teams[m.home_team].w += 1
-            teams[m.home_team].pts += 3
-            teams[m.away_team].l += 1
-        } else if (home < away) {
-            teams[m.away_team].w += 1
-            teams[m.away_team].pts += 3
-            teams[m.home_team].l += 1
-        } else {
-            teams[m.home_team].d += 1
-            teams[m.away_team].d += 1
-            teams[m.home_team].pts += 1
-            teams[m.away_team].pts += 1
-        }
-    })
+            if (home > away) {
+                teams[m.home_team].w += 1
+                teams[m.home_team].pts += 3
+                teams[m.away_team].l += 1
+            } else if (home < away) {
+                teams[m.away_team].w += 1
+                teams[m.away_team].pts += 3
+                teams[m.home_team].l += 1
+            } else {
+                teams[m.home_team].d += 1
+                teams[m.away_team].d += 1
+                teams[m.home_team].pts += 1
+                teams[m.away_team].pts += 1
+            }
+        })
 
-    // Group teams by group
-    const groups: Record<string, TeamStats[]> = {}
-    Object.values(teams).forEach(t => {
-        if (!groups[t.group]) groups[t.group] = []
-        groups[t.group].push({ ...t, gd: t.gf - t.ga })
-    })
+        // Group teams by group
+        const groups: Record<string, TeamStats[]> = {}
+        Object.values(teams).forEach(t => {
+            if (!groups[t.group]) groups[t.group] = []
+            groups[t.group].push({ ...t, gd: t.gf - t.ga })
+        })
 
-    // Sort each group and find the 3rd placed team
-    const thirdPlaced: TeamStats[] = []
-    Object.values(groups).forEach(g => {
-        g.sort((a, b) => {
+        // Sort each group and find the 3rd placed team
+        const rankedThirds: TeamStats[] = []
+        Object.values(groups).forEach(g => {
+            g.sort((a, b) => {
+                if (a.pts !== b.pts) return b.pts - a.pts
+                if (a.gd !== b.gd) return (b.gd ?? 0) - (a.gd ?? 0)
+                if (a.gf !== b.gf) return b.gf - a.gf
+                return a.code.localeCompare(b.code)
+            })
+            if (g.length >= 3) {
+                rankedThirds.push(g[2])
+            }
+        })
+
+        // Sort the 12 third-placed teams
+        rankedThirds.sort((a, b) => {
             if (a.pts !== b.pts) return b.pts - a.pts
             if (a.gd !== b.gd) return (b.gd ?? 0) - (a.gd ?? 0)
             if (a.gf !== b.gf) return b.gf - a.gf
             return a.code.localeCompare(b.code)
         })
-        if (g.length >= 3) {
-            thirdPlaced.push(g[2])
-        }
-    })
 
-    // Sort the 12 third-placed teams
-    thirdPlaced.sort((a, b) => {
-        if (a.pts !== b.pts) return b.pts - a.pts
-        if (a.gd !== b.gd) return (b.gd ?? 0) - (a.gd ?? 0)
-        if (a.gf !== b.gf) return b.gf - a.gf
-        return a.code.localeCompare(b.code) // Fallback to alphabetical
-    })
+        return rankedThirds
+    }, [groupMatches, groupScores])
 
     return (
         <div style={{ marginTop: 40, background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden' }}>

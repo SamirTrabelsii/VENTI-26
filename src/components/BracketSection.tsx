@@ -130,11 +130,12 @@ export default function BracketSection() {
         }
         
         const original: typeof groupScores = {}
+        const shouldUseFrozenOriginals = isGlobalLockPassed()
         for (const [id, s] of Object.entries(groupScores)) {
             original[id] = { 
                 ...s, 
-                home: (s as any).original_home !== '' ? (s as any).original_home : s.home,
-                away: (s as any).original_away !== '' ? (s as any).original_away : s.away 
+                home: shouldUseFrozenOriginals && (s as any).original_home !== '' ? (s as any).original_home : s.home,
+                away: shouldUseFrozenOriginals && (s as any).original_away !== '' ? (s as any).original_away : s.away 
             }
         }
         return computeGroupStandings(original)

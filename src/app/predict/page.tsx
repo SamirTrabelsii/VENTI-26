@@ -153,7 +153,6 @@ export default async function PredictPage() {
                             <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 44, color: 'var(--gold)', marginBottom: 20 }}>3rd Place Standings</h1>
                             <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20 }}>The top 8 third-placed teams across all 12 groups advance to the Round of 32.</p>
                             <ThirdPlaceTable 
-                                predictions={predictions || []}
                                 groupMatches={GROUP_MATCHES} 
                             />
                         </div>
