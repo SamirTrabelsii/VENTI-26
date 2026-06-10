@@ -1462,21 +1462,19 @@ export function getRobohashUrl(seed: string, size: number = 100): string {
     return `https://robohash.org/${encoded}.png?set=set1&size=${size}x${size}`
 }
 
-export const TOURNAMENT_LOCK = '2026-06-11T14:00:00Z' // 6 hours before Match 1
-export const KNOCKOUT_REOPEN = '2026-06-24T00:00:00Z' // Start of Matchday 3
-export const KNOCKOUT_FINAL_LOCK = '2026-06-28T17:00:00Z' // 2 hours before R32 starts
+export const TOURNAMENT_LOCK = '2026-06-11T13:00:00Z' // Opening kickoff: all original predictions lock
+export const KNOCKOUT_FINAL_LOCK = '2026-07-19T15:00:00Z' // Final kickoff: all live bracket predictions closed
 
-export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'GROUP_STAGE_LOCKED' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {
+export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {
     const now = new Date()
     if (now < new Date(TOURNAMENT_LOCK)) return 'PRE_TOURNAMENT'
-    if (now < new Date(KNOCKOUT_REOPEN)) return 'GROUP_STAGE_LOCKED'
     if (now < new Date(KNOCKOUT_FINAL_LOCK)) return 'KNOCKOUT_OPEN'
     return 'FINAL_LOCK'
 }
 
 export function isBracketLocked(): boolean {
     const phase = getTournamentPhase()
-    return phase === 'GROUP_STAGE_LOCKED' || phase === 'FINAL_LOCK'
+    return phase === 'FINAL_LOCK'
 }
 
 export function isGlobalLockPassed(): boolean {

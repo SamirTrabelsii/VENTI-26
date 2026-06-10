@@ -15,11 +15,12 @@ interface Props {
     onChange?: (home: number | '', away: number | '') => void
     onSaved?: (matchId: string, home: number | '', away: number | '') => void
     hideSaveButton?: boolean
+    disabled?: boolean
 }
 
 
 
-export default function MatchCard({ match, prediction, userId, onSaved, localHome, localAway, onChange, hideSaveButton }: Props) {
+export default function MatchCard({ match, prediction, userId, onSaved, localHome, localAway, onChange, hideSaveButton, disabled = false }: Props) {
     const defaultHome = prediction?.home_score ?? ''
     const defaultAway = prediction?.away_score ?? ''
     const home = localHome !== undefined ? localHome : defaultHome
@@ -31,10 +32,12 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
     const [supabase] = useState(() => createClient())
 
     const handleHome = (v: number | '') => { 
+        if (disabled) return
         if (onChange) onChange(v, away)
         setDirty(true); setSaved(false) 
     }
     const handleAway = (v: number | '') => { 
+        if (disabled) return
         if (onChange) onChange(home, v)
         setDirty(true); setSaved(false) 
     }
@@ -110,6 +113,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                         max={20}
                         value={home === '' ? '' : home}
                         placeholder="–"
+                        disabled={disabled}
                         onChange={e => {
                             const raw = e.target.value
                             if (raw === '') { handleHome(''); return }
@@ -123,6 +127,8 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                             borderStyle: 'solid',
                             borderColor: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (home !== '' && home > 0) ? 'var(--gold)' : 'var(--cream)',
+                            opacity: disabled ? 0.45 : 1,
+                            cursor: disabled ? 'not-allowed' : 'text',
                             MozAppearance: 'textfield',
                             WebkitAppearance: 'none',
                         }}
@@ -137,6 +143,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                         max={20}
                         value={away === '' ? '' : away}
                         placeholder="–"
+                        disabled={disabled}
                         onChange={e => {
                             const raw = e.target.value
                             if (raw === '') { handleAway(''); return }
@@ -150,6 +157,8 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                             borderStyle: 'solid',
                             borderColor: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--border)',
                             color: (away !== '' && away > 0) ? 'var(--gold)' : 'var(--cream)',
+                            opacity: disabled ? 0.45 : 1,
+                            cursor: disabled ? 'not-allowed' : 'text',
                             MozAppearance: 'textfield',
                             WebkitAppearance: 'none',
                         }}

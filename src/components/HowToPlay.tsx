@@ -53,16 +53,16 @@ export default function HowToPlay() {
                     </p>
                     <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <li>
-                            <strong>1. Original Predictions (Before Kickoff):</strong> Predict all group stage match scores. The bracket will automatically populate based on your predicted standings. You must submit your complete bracket before the tournament starts.
+                            <strong>1. Original Predictions:</strong> Before the opening kickoff, predict every group-stage score and complete your original knockout bracket. Your bracket is built from your predicted group standings.
                         </li>
                         <li>
-                            <strong>2. Group Stage Lock:</strong> Once the first World Cup match begins, all group stage and bracket predictions are <strong>hard-locked</strong>.
+                            <strong>2. Opening Kickoff Lock:</strong> As soon as the first World Cup match starts, all original group predictions and original bracket picks are <strong>hard-locked</strong>. No group-stage edits are supported after this point.
                         </li>
                         <li>
-                            <strong>3. Matchday 3 Reopen (Live Bracket):</strong> Once the final group stage matches (Matchday 3) begin, the Knockout Bracket unlocks! You can toggle between your <em>Original Predictions</em> and the <em>Live Bracket</em> to update your knockout picks based on the real-world qualifying teams.
+                            <strong>3. Live Bracket:</strong> When real knockout fixtures become known, the Live Bracket opens with empty score inputs. You can re-predict known knockout matches using the real teams from the running competition.
                         </li>
                         <li>
-                            <strong>4. Final Knockout Lock:</strong> Two hours before the Round of 32 begins, the Live Bracket permanently locks for the remainder of the tournament.
+                            <strong>4. Per-Match Knockout Lock:</strong> Each live knockout prediction locks at that match&apos;s kickoff. Original bracket bonuses still come only from the bracket you locked before the tournament began.
                         </li>
                     </ul>
                 </div>

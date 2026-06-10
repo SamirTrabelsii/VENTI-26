@@ -156,18 +156,19 @@ export function PredictionProvider({
     }, [userId, groupScores, bracketPicks, hasUnsavedChanges])
 
     const setGroupScore = useCallback((matchId: string, home: number | '', away: number | '') => {
+        if (isGlobalLockPassed()) return
+
         setHasUnsavedChanges(true)
 
         setGroupScores(prev => {
             const existing = prev[matchId]
-            const shouldUpdateOriginal = !isGlobalLockPassed()
             const next = {
                 ...prev,
                 [matchId]: {
                     home,
                     away,
-                    original_home: shouldUpdateOriginal ? home : existing?.original_home ?? home,
-                    original_away: shouldUpdateOriginal ? away : existing?.original_away ?? away,
+                    original_home: home,
+                    original_away: away,
                     is_repredicted: existing?.is_repredicted ?? false,
                 }
             }

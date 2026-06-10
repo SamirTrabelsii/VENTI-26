@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { usePredictions } from './PredictionContext'
 import KnockoutMatchCard from './KnockoutMatchCard'
-import { GROUPS, GROUP_MATCHES, R32_SLOTS, getTeam, isGlobalLockPassed, isBracketLocked } from '@/lib/wc2026-data'
+import { GROUPS, GROUP_MATCHES, R32_SLOTS, KNOCKOUT_MATCHES, getTeam, getTournamentPhase, isGlobalLockPassed } from '@/lib/wc2026-data'
 import { useRealTournament } from '@/lib/useRealTournament'
 import TeamFlag from '@/components/TeamFlag'
 
@@ -112,9 +112,31 @@ function buildR32Slots(data: { groupStandings: Record<string, string[]>, thirdPl
     return pairs
 }
 
+function getKnockoutFixtureId(round: Round, slotIndex: number): string | null {
+    if (round === 'champion') return null
+    if (round === 'final') return 'final'
+    if (round === 'third_place') return 'third_place'
+    return `${round}_${slotIndex + 1}`
+}
+
+function hasKickoffPassed(round: Round, slotIndex: number) {
+    const fixtureId = getKnockoutFixtureId(round, slotIndex)
+    if (!fixtureId) return true
+
+    const fixture = KNOCKOUT_MATCHES.find(m => m.id === fixtureId)
+    if (!fixture) return false
+
+    return new Date() >= new Date(fixture.kickoff)
+}
+
+function hasKnownFixture(slot?: Slot) {
+    if (!slot) return false
+    return !!getTeam(slot.home) && !!getTeam(slot.away)
+}
+
 export default function BracketSection() {
     const { groupScores, bracketPicks, setBracketPick } = usePredictions()
-    const isLocked = isBracketLocked()
+    const phase = getTournamentPhase()
     const [viewMode, setViewMode] = useState<'live' | 'original'>('original')
     const realState = useRealTournament()
 
@@ -202,17 +224,24 @@ export default function BracketSection() {
         })
     }, [r32Slots, bracketPicks, viewMode, realState])
 
+    const canEditSlot = useCallback((round: Round, slotIndex: number, slot?: Slot) => {
+        if (viewMode === 'original') {
+            return phase === 'PRE_TOURNAMENT'
+        }
+
+        return phase === 'KNOCKOUT_OPEN' && hasKnownFixture(slot) && !hasKickoffPassed(round, slotIndex)
+    }, [phase, viewMode])
+
     const handleChange = (round: Round, slotIndex: number, homeScore: number | '', awayScore: number | '', advancingTeam: string | null) => {
-        if (isLocked) return;
+        const slot = getSlotsForRound(round)[slotIndex]
+        if (!canEditSlot(round, slotIndex, slot)) return;
         let adv = advancingTeam
         if (!adv) {
             if (typeof homeScore === 'number' && typeof awayScore === 'number') {
                 if (homeScore > awayScore) {
-                    const slots = getSlotsForRound(round)
-                    adv = slots[slotIndex].home
+                    adv = slot.home
                 } else if (awayScore > homeScore) {
-                    const slots = getSlotsForRound(round)
-                    adv = slots[slotIndex].away
+                    adv = slot.away
                 }
             }
         }
@@ -222,7 +251,9 @@ export default function BracketSection() {
             home_score: homeScore,
             away_score: awayScore,
             predicted_home_team: getSlotsForRound(round)[slotIndex].home,
-            predicted_away_team: getSlotsForRound(round)[slotIndex].away
+            predicted_away_team: getSlotsForRound(round)[slotIndex].away,
+            original_team_code: bracketPicks[`${round}_${slotIndex}`]?.original_team_code,
+            is_repredicted: viewMode === 'live',
         })
     }
 
@@ -249,15 +280,19 @@ export default function BracketSection() {
                     {indices.map(i => {
                         const slot = slots[i]
                         const pickData = bracketPicks[`${round}_${i}`]
+                        const isLiveReprediction = viewMode === 'live' && pickData?.is_repredicted
+                        const visiblePickData = viewMode === 'live' && !isLiveReprediction ? undefined : pickData
+                        const disabled = !canEditSlot(round, i, slot)
                         return (
                             <div key={i} style={{ position: 'relative' }}>
                                 <KnockoutMatchCard
                                     matchId={`${round}_${i}`}
                                     homeCode={slot?.home ?? 'TBD'}
                                     awayCode={slot?.away ?? 'TBD'}
-                                    homeScore={pickData?.home_score ?? ''}
-                                    awayScore={pickData?.away_score ?? ''}
-                                    advancingCode={viewMode === 'live' ? realState.knockoutResults[`${round}_${i}`] || pickData?.team_code || null : viewMode === 'original' && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
+                                    homeScore={visiblePickData?.home_score ?? ''}
+                                    awayScore={visiblePickData?.away_score ?? ''}
+                                    advancingCode={viewMode === 'live' ? (isLiveReprediction ? pickData?.team_code ?? null : realState.knockoutResults[`${round}_${i}`] || null) : viewMode === 'original' && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
+                                    disabled={disabled}
                                     onChange={(_, h, a, adv) => handleChange(round, i, h, a, adv)}
                                 />
                             </div>
@@ -300,6 +335,27 @@ export default function BracketSection() {
                         Original Predictions
                     </button>
                 </div>
+            </div>
+
+            <div style={{
+                maxWidth: 860,
+                margin: '0 auto 24px',
+                padding: '14px 18px',
+                borderRadius: 12,
+                border: '1px solid var(--border-gold)',
+                background: 'rgba(212,168,67,0.08)',
+                color: 'var(--dim)',
+                fontSize: 13,
+                lineHeight: 1.6,
+                textAlign: 'center'
+            }}>
+                <strong style={{ color: 'var(--gold)' }}>
+                    {viewMode === 'original' ? 'Original bracket' : 'Live bracket'}
+                </strong>
+                {' '}
+                {viewMode === 'original'
+                    ? 'locks at the opening kickoff and is used for original bracket bonuses. No edits are allowed after the tournament starts.'
+                    : 'opens when real knockout fixtures are known. Each known match starts empty and can be re-predicted until that match kicks off.'}
             </div>
 
             <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>

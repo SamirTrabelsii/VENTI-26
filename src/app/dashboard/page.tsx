@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { GROUP_MATCHES } from '@/lib/wc2026-data'
+import { GROUP_MATCHES, TOURNAMENT_LOCK } from '@/lib/wc2026-data'
 import Link from 'next/link'
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
     }
 
     // ── Countdown ──────────────────────────────────────────────────────────────
-    const kickoff = new Date('2026-06-11T21:00:00Z')   // USA vs Mexico opening match
+    const kickoff = new Date(TOURNAMENT_LOCK)
     const now = new Date()
     const diffMs = Math.max(0, kickoff.getTime() - now.getTime())
     const days = Math.floor(diffMs / 86400000)

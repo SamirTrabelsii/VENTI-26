@@ -8,6 +8,7 @@ interface KnockoutMatchCardProps {
     homeScore: number | ''
     awayScore: number | ''
     advancingCode: string | null
+    disabled?: boolean
     onChange: (matchId: string, home: number | '', away: number | '', advancing: string | null) => void
 }
 
@@ -19,6 +20,7 @@ export default function KnockoutMatchCard({
     homeScore,
     awayScore,
     advancingCode,
+    disabled = false,
     onChange
 }: KnockoutMatchCardProps) {
     const isTied = typeof homeScore === 'number' && typeof awayScore === 'number' && homeScore === awayScore
@@ -68,7 +70,7 @@ export default function KnockoutMatchCard({
         height: 52,
         textAlign: 'center',
         outline: 'none',
-        cursor: isHomeTBD || isAwayTBD ? 'default' : 'pointer',
+        cursor: disabled || isHomeTBD || isAwayTBD ? 'default' : 'pointer',
         appearance: 'none',
         WebkitAppearance: 'none',
         flexShrink: 0,
@@ -125,12 +127,12 @@ export default function KnockoutMatchCard({
                         if (!isNaN(n) && n >= 0 && n <= 20) handleHomeChange(n)
                     }}
                     onFocus={e => e.target.select()}
-                    disabled={isHomeTBD || isAwayTBD}
+                    disabled={disabled || isHomeTBD || isAwayTBD}
                     style={{
                         ...selectStyle,
                         borderColor: (homeScore !== '' && homeScore > 0) ? 'var(--gold)' : 'var(--border)',
                         color: (homeScore !== '' && homeScore > 0) ? 'var(--gold)' : 'var(--cream)',
-                        opacity: (isHomeTBD || isAwayTBD) ? 0.4 : 1,
+                        opacity: (disabled || isHomeTBD || isAwayTBD) ? 0.4 : 1,
                         MozAppearance: 'textfield',
                         WebkitAppearance: 'none',
                     }}
@@ -171,12 +173,12 @@ export default function KnockoutMatchCard({
                         if (!isNaN(n) && n >= 0 && n <= 20) handleAwayChange(n)
                     }}
                     onFocus={e => e.target.select()}
-                    disabled={isHomeTBD || isAwayTBD}
+                    disabled={disabled || isHomeTBD || isAwayTBD}
                     style={{
                         ...selectStyle,
                         borderColor: (awayScore !== '' && awayScore > 0) ? 'var(--gold)' : 'var(--border)',
                         color: (awayScore !== '' && awayScore > 0) ? 'var(--gold)' : 'var(--cream)',
-                        opacity: (isHomeTBD || isAwayTBD) ? 0.4 : 1,
+                        opacity: (disabled || isHomeTBD || isAwayTBD) ? 0.4 : 1,
                         MozAppearance: 'textfield',
                         WebkitAppearance: 'none',
                     }}
@@ -205,7 +207,10 @@ export default function KnockoutMatchCard({
                             return (
                                 <button
                                     key={code}
-                                    onClick={() => onChange(matchId, homeScore as number, awayScore as number, code)}
+                                    onClick={() => {
+                                        if (!disabled) onChange(matchId, homeScore as number, awayScore as number, code)
+                                    }}
+                                    disabled={disabled}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -215,7 +220,8 @@ export default function KnockoutMatchCard({
                                         border: isSelected ? '1px solid var(--gold)' : '1px solid var(--border)',
                                         background: isSelected ? 'rgba(212,168,67,0.12)' : 'transparent',
                                         color: isSelected ? 'var(--gold)' : 'var(--muted)',
-                                        cursor: 'pointer',
+                                        cursor: disabled ? 'default' : 'pointer',
+                                        opacity: disabled ? 0.5 : 1,
                                         fontSize: 12,
                                         fontWeight: isSelected ? 700 : 500,
                                         transition: 'all 0.15s ease',

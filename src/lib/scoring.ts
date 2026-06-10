@@ -261,8 +261,8 @@ export const SCORING_REFERENCE = {
         { pts: 32, label: 'World Cup champion', note: 'If your original predicted champion wins it all' },
     ],
     lockRules: {
-        deadline: '2026-06-11T07:00:00Z',
-        label: 'Global Lock — June 11 · 08:00 GMT+1',
-        note: 'Original predictions & bracket picks lock 12 hours before kick-off. After the lock, you can still update match scores as live re-predictions, but multipliers will NOT apply and your original bracket is frozen.',
+        deadline: '2026-06-11T13:00:00Z',
+        label: 'Opening Kickoff Lock - June 11',
+        note: 'Original group predictions and original bracket picks lock at the first match kickoff. Live knockout re-predictions open later only for known knockout fixtures and lock per match at kickoff.',
     },
-}
+}

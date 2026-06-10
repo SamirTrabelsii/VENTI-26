@@ -54,14 +54,14 @@ const FAQ_ITEMS: FAQItem[] = [
                 There are <strong style={{ color: 'var(--cream)' }}>two lock types</strong>:
                 <ul style={{ marginTop: 10, paddingLeft: 18, lineHeight: 2, color: 'var(--dim)' }}>
                     <li>
-                        <strong style={{ color: 'var(--gold)' }}>🔒 Global Lock — June 11 · 08:00 GMT+1</strong><br />
-                        Your full bracket and all group stage original predictions freeze 12 hours before the opening kick-off.
-                        This locks in your <em>original predictions</em> which earn multipliers in the knockout rounds.
+                        <strong style={{ color: 'var(--gold)' }}>🔒 Opening Kickoff Lock — June 11</strong><br />
+                        Your full bracket and all group stage predictions freeze when the first World Cup match kicks off.
+                        This locks in your <em>original predictions</em> for bracket bonuses and multipliers.
                     </li>
                     <li>
-                        <strong style={{ color: '#38bdf8' }}>⚡ Live Lock — per match, at kick-off</strong><br />
-                        After the Global Lock, you can still update individual match score predictions right up until each match starts.
-                        These are <em>live re-predictions</em> — they score normally but <strong>without</strong> the knockout multipliers.
+                        <strong style={{ color: '#38bdf8' }}>⚡ Live Knockout Lock — per match, at kick-off</strong><br />
+                        Once real knockout fixtures are known, the Live Bracket opens with empty score inputs.
+                        Each known knockout match can be re-predicted until that match starts.
                     </li>
                 </ul>
             </>
@@ -72,9 +72,9 @@ const FAQ_ITEMS: FAQItem[] = [
         question: 'What is the difference between "Original" and "Live" predictions?',
         answer: (
             <>
-                <strong style={{ color: 'var(--gold)' }}>Original</strong> predictions are those you submitted before the Global Lock (June 11 · 08:00 GMT+1).
+                <strong style={{ color: 'var(--gold)' }}>Original</strong> predictions are those you submitted before the opening kickoff lock on June 11.
                 They earn <strong style={{ color: 'var(--gold)' }}>knockout multipliers</strong> (×1.5 up to ×5) and can also earn <strong style={{ color: 'var(--gold)' }}>bracket bonuses</strong>.<br /><br />
-                <strong style={{ color: '#38bdf8' }}>Live</strong> predictions are updates you make after the global lock, right before a match kicks off.
+                <strong style={{ color: '#38bdf8' }}>Live</strong> predictions are knockout updates you make after real knockout fixtures are known, before each match kicks off.
                 They score using the standard point rules but <strong style={{ color: '#e05c4a' }}>do not</strong> receive multipliers or bracket bonuses.
                 Live predictions are shown with a blue <em>LIVE</em> badge on match cards.
             </>
@@ -85,9 +85,8 @@ const FAQ_ITEMS: FAQItem[] = [
         question: 'Can I change a prediction after saving it?',
         answer: (
             <>
-                Yes — as long as the match has <strong style={{ color: 'var(--cream)' }}>not yet kicked off</strong>, you can update your prediction at any time.
-                If it&apos;s before the Global Lock, saving again simply updates your original prediction.
-                If it&apos;s after the Global Lock but before the match starts, saving marks it as a <em>Live Re-prediction</em> (standard points, no multipliers).
+                Before the opening kickoff, you can update original group predictions and your original bracket.
+                After that, group predictions are closed permanently. Knockout matches can only be re-predicted in the Live Bracket once their real fixture is known, and only until that match kicks off.
             </>
         ),
     },
