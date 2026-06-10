@@ -516,6 +516,21 @@ function UsersTab() {
         await loadUsers()
     }
 
+    const resetPassword = async (userId: string, name: string) => {
+        if (!confirm(`Generate a temporary password for "${name}"?\n\nTheir old password will stop working immediately.`)) return
+        const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reset_password', user_id: userId }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+            setActionMsg(`Password reset for ${name}. Temporary password: ${data.temporary_password}`)
+        } else {
+            setActionMsg(`❌ Password reset failed: ${data.error}`)
+        }
+    }
+
     const deleteUser = async (userId: string, name: string) => {
         if (!confirm(`⚠️ DELETE user "${name}"?\n\nThis will permanently remove their account and all data.\nThis cannot be undone!`)) return
         const res = await fetch(`/api/admin/users?id=${userId}`, { method: 'DELETE' })
@@ -586,6 +601,9 @@ function UsersTab() {
                                 </td>
                                 <td style={td}>
                                     <div style={{ display: 'flex', gap: 4 }}>
+                                        <button onClick={() => resetPassword(u.id, u.display_name)} style={btnSmall} title="Reset password">
+                                            🔑
+                                        </button>
                                         <button onClick={() => resetUser(u.id, u.display_name)} style={btnSmall} title="Reset predictions & scores">
                                             🔄
                                         </button>
