@@ -75,7 +75,7 @@ interface LeaderboardEntry {
     avatar_color: string
     predicted_home: number
     predicted_away: number
-    points: number
+    points: number | null
     isExact: boolean
 }
 
@@ -122,6 +122,9 @@ export default function MatchModal({
                     setLoadingBoard(false)
                 })
                 .catch(() => setLoadingBoard(false))
+        } else {
+            setLeaderboard([])
+            setLoadingBoard(false)
         }
     }, [localMatchId, isLive, isFinished])
 
@@ -315,53 +318,59 @@ export default function MatchModal({
 
                 {/* Match Leaderboard */}
                 {(isLive || isFinished) && (
-                    <div style={{ borderTop: '1px solid var(--border)', padding: '16px 20px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--gold)' }}>
-                                Top 5 Predictions (Global)
-                            </p>
-                        </div>
-                        
-                        {loadingBoard ? (
-                            <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '10px 0' }}>Loading rankings...</div>
-                        ) : leaderboard.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                {leaderboard.map((u, i) => (
-                                    <div key={u.user_id} style={{
-                                        display: 'flex', alignItems: 'center', gap: 10,
-                                        background: u.isExact ? 'rgba(212,168,67,0.08)' : 'var(--surface2)',
-                                        border: `1px solid ${u.isExact ? 'var(--border-gold)' : 'var(--border)'}`,
-                                        padding: '10px 14px', borderRadius: 10
-                                    }}>
-                                        <img 
-                                            src={getRobohashUrl(u.display_name, 48)} 
-                                            alt={u.display_name}
-                                            style={{ 
-                                                width: 28, height: 28, borderRadius: '50%', 
-                                                border: `1.5px solid ${u.isExact ? 'var(--gold)' : 'var(--border)'}`,
-                                                objectFit: 'cover'
-                                            }} 
-                                        />
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>
-                                            {u.display_name}
-                                        </span>
-                                        
-                                        <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: 'var(--dim)', paddingRight: 10 }}>
-                                            {u.predicted_home} - {u.predicted_away}
-                                        </span>
-                                        
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: u.isExact ? 'var(--gold)' : 'var(--green-bright)' }}>
-                                            +{u.points}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '10px 0' }}>
-                                No predictions found for this match.
-                            </div>
-                        )}
+                <div style={{ borderTop: '1px solid var(--border)', padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--gold)' }}>
+                            Global Predictions
+                        </p>
+                        <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                            {leaderboard.length} user{leaderboard.length !== 1 ? 's' : ''}
+                        </span>
                     </div>
+                    
+                    {loadingBoard ? (
+                        <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '10px 0' }}>Loading rankings...</div>
+                    ) : leaderboard.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+                            {leaderboard.map((u, i) => (
+                                <div key={u.user_id} style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    background: u.isExact ? 'rgba(212,168,67,0.08)' : 'var(--surface2)',
+                                    border: `1px solid ${u.isExact ? 'var(--border-gold)' : 'var(--border)'}`,
+                                    padding: '10px 14px', borderRadius: 10
+                                }}>
+                                    <span style={{ width: 18, fontSize: 11, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                                        {i + 1}
+                                    </span>
+                                    <img 
+                                        src={getRobohashUrl(u.display_name, 48)} 
+                                        alt={u.display_name}
+                                        style={{ 
+                                            width: 28, height: 28, borderRadius: '50%', 
+                                            border: `1.5px solid ${u.isExact ? 'var(--gold)' : 'var(--border)'}`,
+                                            objectFit: 'cover'
+                                        }} 
+                                    />
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {u.display_name}
+                                    </span>
+                                    
+                                    <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: 'var(--dim)', paddingRight: 10 }}>
+                                        {u.predicted_home} - {u.predicted_away}
+                                    </span>
+                                    
+                                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 48, textAlign: 'right', color: u.points === null ? 'var(--muted)' : u.isExact ? 'var(--gold)' : 'var(--green-bright)' }}>
+                                        {u.points === null ? 'Pending' : `+${u.points}`}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '10px 0' }}>
+                            No predictions found for this match.
+                        </div>
+                    )}
+                </div>
                 )}
 
                 {/* Your prediction for this match */}

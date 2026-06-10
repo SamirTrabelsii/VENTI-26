@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, verifyAdmin } from '@/lib/supabase/admin'
+import { randomBytes } from 'crypto'
+
+function generateTemporaryPassword() {
+    return `Venti26-${randomBytes(4).toString('hex')}-${randomBytes(3).toString('hex')}`
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/users
@@ -95,8 +100,8 @@ export async function DELETE(request: Request) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/users   { action: 'reset', user_id: '...' }
-// Reset a user's predictions, bracket picks, and scores
+// POST /api/admin/users   { action: 'reset' | 'reset_password', user_id: '...' }
+// Reset a user's predictions/bracket/scores, or issue a temporary password
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -106,11 +111,28 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action, user_id } = body
 
-    if (action !== 'reset' || !user_id) {
+    if (!['reset', 'reset_password'].includes(action) || !user_id) {
         return NextResponse.json({ error: 'Invalid action or missing user_id' }, { status: 400 })
     }
 
     const db = createAdminClient()
+
+    if (action === 'reset_password') {
+        const temporaryPassword = generateTemporaryPassword()
+        const { error } = await db.auth.admin.updateUserById(user_id, {
+            password: temporaryPassword,
+        })
+
+        if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            success: true,
+            user_id,
+            temporary_password: temporaryPassword,
+        })
+    }
 
     const results: string[] = []
 
