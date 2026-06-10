@@ -115,7 +115,7 @@ function buildR32Slots(data: { groupStandings: Record<string, string[]>, thirdPl
 export default function BracketSection() {
     const { groupScores, bracketPicks, setBracketPick } = usePredictions()
     const isLocked = isBracketLocked()
-    const [viewMode, setViewMode] = useState<'live' | 'original'>('live')
+    const [viewMode, setViewMode] = useState<'live' | 'original'>('original')
     const realState = useRealTournament()
 
     // If viewing original, construct a fake groupScores object using original_home/away
