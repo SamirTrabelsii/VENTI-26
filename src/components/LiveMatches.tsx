@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { GROUP_MATCHES, getAdjustedKickoff } from '@/lib/wc2026-data'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES, getAdjustedKickoff } from '@/lib/wc2026-data'
+import { scoreMatch, formatPoints } from '@/lib/scoring'
+
+const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Goal {
@@ -133,6 +136,17 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
         const hScore = m.score.fullTime.home
         const aScore = m.score.fullTime.away
 
+        // Compute provisional points
+        const dbMatch = ALL_MATCHES.find(g => g.home_team === m.homeTeam.tla && g.away_team === m.awayTeam.tla)
+        const prediction = predictions.find(p => p.match_id === dbMatch?.id)
+        
+        let provisionalPoints: number | null = null
+        if ((isLive || isFinished) && prediction && hScore !== null && aScore !== null && dbMatch) {
+            const isKo = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label)
+            const res = scoreMatch(prediction.home_score, prediction.away_score, hScore, aScore, isKo)
+            provisionalPoints = res.total
+        }
+
         return (
             <div
                 onClick={() => setSelectedMatch(m)}
@@ -187,9 +201,16 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                         )}
                         {st.label}{isLive && m.minute ? ` ${m.minute}'` : ''}
                     </span>
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-                        {formatGroup(m.group)}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {provisionalPoints !== null && provisionalPoints > 0 && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,168,67,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                +{provisionalPoints} pts
+                            </span>
+                        )}
+                        <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                            {formatGroup(m.group)}
+                        </span>
+                    </div>
                 </div>
 
                 {/* Teams + score */}
@@ -366,9 +387,9 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
             {selectedMatch && (
                 <MatchModal 
                     match={selectedMatch} 
-                    localMatchId={GROUP_MATCHES.find(g => g.home_team === selectedMatch.homeTeam.tla && g.away_team === selectedMatch.awayTeam.tla)?.id}
+                    localMatchId={ALL_MATCHES.find(g => g.home_team === selectedMatch.homeTeam.tla && g.away_team === selectedMatch.awayTeam.tla)?.id}
                     prediction={
-                        predictions.find(p => p.match_id === GROUP_MATCHES.find(g => g.home_team === selectedMatch.homeTeam.tla && g.away_team === selectedMatch.awayTeam.tla)?.id) 
+                        predictions.find(p => p.match_id === ALL_MATCHES.find(g => g.home_team === selectedMatch.homeTeam.tla && g.away_team === selectedMatch.awayTeam.tla)?.id) 
                         ?? null
                     }
                     onClose={() => setSelectedMatch(null)} 

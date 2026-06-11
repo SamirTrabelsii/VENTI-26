@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getTeam } from '@/lib/wc2026-data'
+import { getTeam, TEAMS } from '@/lib/wc2026-data'
 
 export async function GET() {
     try {
@@ -56,11 +56,13 @@ export async function GET() {
                 utcDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}:00.000Z`
             }
 
-            // Parse teams
-            const homeTla = getTeam(g.home_team_id)?.code || 'TBD'
-            const awayTla = getTeam(g.away_team_id)?.code || 'TBD'
-            const homeName = g.home_team_name_en || g.home_team_label || 'TBD'
-            const awayName = g.away_team_name_en || g.away_team_label || 'TBD'
+            // Parse teams — look up by numeric ID first (worldcup26.ir uses numeric team IDs)
+            const homeTeamData = TEAMS.find(t => t.id === String(g.home_team_id)) || getTeam(g.home_team_name_en || '')
+            const awayTeamData = TEAMS.find(t => t.id === String(g.away_team_id)) || getTeam(g.away_team_name_en || '')
+            const homeTla = homeTeamData?.code || 'TBD'
+            const awayTla = awayTeamData?.code || 'TBD'
+            const homeName = g.home_team_name_en || g.home_team_label || homeTeamData?.name || 'TBD'
+            const awayName = g.away_team_name_en || g.away_team_label || awayTeamData?.name || 'TBD'
 
             return {
                 id: parseInt(g.id),

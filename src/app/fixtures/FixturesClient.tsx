@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, getTeam, getAdjustedKickoff } from '@/lib/wc2026-data'
 import MatchModal, { MatchData as ModalMatchData } from '@/components/MatchModal'
 import TeamFlag from '@/components/TeamFlag'
+import { scoreMatch } from '@/lib/scoring'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
@@ -41,22 +42,50 @@ interface FixturesClientProps {
 export default function FixturesClient({ predictions, dbMatches, apiMatches = [] }: FixturesClientProps) {
     const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
     const [filter, setFilter] = useState<'all' | 'group' | 'knockout'>('all')
+    const [liveMatches, setLiveMatches] = useState<any[]>([])
+
+    // Fetch real-time live matches
+    useEffect(() => {
+        const fetchLive = async () => {
+            try {
+                const res = await fetch('/api/matches/live', { cache: 'no-store' })
+                const data = await res.json()
+                setLiveMatches(data.matches || [])
+            } catch { }
+        }
+        fetchLive()
+        const int = setInterval(fetchLive, 60_000)
+        return () => clearInterval(int)
+    }, [])
 
     // Combine static matches with DB statuses
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
             const dbMatch = dbMatches.find(d => d.id === m.id)
+            const liveMatch = liveMatches.find(l => l.id.toString() === m.api_id)
             
+            let status = dbMatch?.status ?? 'upcoming'
+            let homeScore = dbMatch?.home_score ?? null
+            let awayScore = dbMatch?.away_score ?? null
+
+            if (liveMatch && liveMatch.status !== 'SCHEDULED') {
+                if (liveMatch.status === 'IN_PLAY' || liveMatch.status === 'PAUSED') status = 'live'
+                else if (liveMatch.status === 'FINISHED') status = 'finished'
+                
+                homeScore = liveMatch.score.fullTime.home ?? homeScore
+                awayScore = liveMatch.score.fullTime.away ?? awayScore
+            }
+
             return {
                 ...m,
                 kickoff: m.kickoff,
-                dbStatus: dbMatch?.status ?? 'upcoming',
-                actualHomeScore: dbMatch?.home_score ?? null,
-                actualAwayScore: dbMatch?.away_score ?? null,
+                dbStatus: status,
+                actualHomeScore: homeScore,
+                actualAwayScore: awayScore,
                 isKnockoutMatch: isKnockout(m.group_label),
             }
         })
-    }, [dbMatches])
+    }, [dbMatches, liveMatches])
 
     // Filter
     const filteredMatches = useMemo(() => {
@@ -218,6 +247,13 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
                                 const ko = m.isKnockoutMatch
                                 const roundLabel = ROUND_LABELS[m.group_label]
 
+                                const prediction = predictions.find(p => p.match_id === m.id)
+                                let provisionalPoints: number | null = null
+                                if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
+                                    const res = scoreMatch(prediction.home_score, prediction.away_score, m.actualHomeScore, m.actualAwayScore, ko)
+                                    provisionalPoints = res.total
+                                }
+
                                 return (
                                     <div
                                         key={m.id}
@@ -302,9 +338,16 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
                                             </span>
                                         </div>
 
-                                        {/* Venue */}
-                                        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span>🏟️</span> {m.venue}, {m.city}
+                                        {/* Venue & Points */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                                            <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span>🏟️</span> {m.venue}, {m.city}
+                                            </div>
+                                            {provisionalPoints !== null && provisionalPoints > 0 && (
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,168,67,0.1)', padding: '2px 8px', borderRadius: 4 }}>
+                                                    +{provisionalPoints} pts
+                                                </div>
+                                            )}
                                         </div>
 
                                     </div>

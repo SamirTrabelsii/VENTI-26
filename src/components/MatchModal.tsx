@@ -1,6 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { getRobohashUrl, getAdjustedKickoff } from '@/lib/wc2026-data'
+import { getRobohashUrl, getAdjustedKickoff, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
+import { scoreMatch } from '@/lib/scoring'
+import { useMemo } from 'react'
+
+const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
 interface Goal {
     minute: number
@@ -127,6 +131,31 @@ export default function MatchModal({
             setLoadingBoard(false)
         }
     }, [localMatchId, isLive, isFinished])
+
+    const displayLeaderboard = useMemo(() => {
+        if (!leaderboard || leaderboard.length === 0) return []
+
+        return leaderboard.map(u => {
+            let points = u.points
+            let isExact = u.isExact
+
+            // Calculate live points if the match is live or finished and DB points are still pending
+            if (points === null && (isLive || isFinished) && hScore !== null && aScore !== null) {
+                const dbMatch = ALL_MATCHES.find(m => m.id === localMatchId)
+                const isKoMatch = dbMatch ? ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label) : false
+                
+                const res = scoreMatch(u.predicted_home, u.predicted_away, hScore, aScore, isKoMatch)
+                points = res.total
+                isExact = res.type === 'exact'
+            }
+
+            return { ...u, points, isExact }
+        }).sort((a, b) => {
+            const pA = a.points || 0
+            const pB = b.points || 0
+            return pB - pA || (b.isExact ? 1 : 0) - (a.isExact ? 1 : 0) || a.display_name.localeCompare(b.display_name)
+        })
+    }, [leaderboard, isLive, isFinished, hScore, aScore, localMatchId])
 
     return (
         <div
@@ -330,9 +359,9 @@ export default function MatchModal({
                     
                     {loadingBoard ? (
                         <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '10px 0' }}>Loading rankings...</div>
-                    ) : leaderboard.length > 0 ? (
+                    ) : displayLeaderboard.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
-                            {leaderboard.map((u, i) => (
+                            {displayLeaderboard.map((u, i) => (
                                 <div key={u.user_id} style={{
                                     display: 'flex', alignItems: 'center', gap: 10,
                                     background: u.isExact ? 'rgba(212,168,67,0.08)' : 'var(--surface2)',

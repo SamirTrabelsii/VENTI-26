@@ -2,24 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { GROUP_MATCHES, getRobohashUrl } from '@/lib/wc2026-data'
 import Nav from '@/components/Nav'
 import { redirect } from 'next/navigation'
+import LeaderboardClient, { LeaderboardUser } from './LeaderboardClient'
 
 const GROUP_TOTAL = GROUP_MATCHES.length   // 72
 const KNOCKOUT_TOTAL = 32                  // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
 const TOTAL_MATCHES = GROUP_TOTAL + KNOCKOUT_TOTAL  // 104
 
-interface LeaderboardUser {
-    id: string
-    display_name: string
-    avatar_initials: string
-    avatar_color: string
-    total_points: number
-    exact_scores: number
-    correct_results: number
-    streak: number
-    group_preds: number
-    bracket_preds: number
-    total_preds: number
-}
+
 
 export default async function LeaderboardPage() {
     const supabase = await createClient()
@@ -57,12 +46,12 @@ export default async function LeaderboardPage() {
     }
 
     // Helper to fetch all rows beyond 1000 limit
-    async function fetchAllUserIds(table: string) {
+    async function fetchAll(table: string, columns: string) {
         const allData: any[] = []
         let hasMore = true
         let start = 0
         while (hasMore) {
-            const { data } = await supabase.from(table).select('user_id').range(start, start + 999)
+            const { data } = await supabase.from(table).select(columns).range(start, start + 999)
             if (data && data.length > 0) {
                 allData.push(...data)
                 start += 1000
@@ -75,14 +64,14 @@ export default async function LeaderboardPage() {
     }
 
     // 3. Fetch group prediction counts per user
-    const groupPredData = await fetchAllUserIds('predictions')
+    const groupPredData = await fetchAll('predictions', 'user_id')
     const groupPredCounts = new Map<string, number>()
     for (const row of groupPredData) {
         groupPredCounts.set(row.user_id, (groupPredCounts.get(row.user_id) ?? 0) + 1)
     }
 
     // 4. Fetch bracket prediction counts per user
-    const bracketPredData = await fetchAllUserIds('bracket_picks')
+    const bracketPredData = await fetchAll('bracket_picks', 'user_id')
     const bracketPredCounts = new Map<string, number>()
     for (const row of bracketPredData) {
         bracketPredCounts.set(row.user_id, (bracketPredCounts.get(row.user_id) ?? 0) + 1)
@@ -108,12 +97,17 @@ export default async function LeaderboardPage() {
         }
     })
 
-    // Sort: by points descending, then by prediction progress descending, then by name
-    leaderboard.sort((a, b) =>
-        b.total_points - a.total_points
-        || b.total_preds - a.total_preds
-        || a.display_name.localeCompare(b.display_name)
-    )
+    // 6. Fetch ALL predictions for the Live Prediction Matrix
+    // This is safe for a few thousand users. It allows the client to do O(N) scoring dynamically without 
+    // requiring complex server-sent events for every goal.
+    const allPredictions = await fetchAll('predictions', 'user_id, match_id, home_score, away_score')
+
+    // 7. Fetch DB match status so we know which matches are already officially synced
+    const { data: dbMatches } = await supabase.from('matches').select('id, status')
+    const dbMatchStatusMap = new Map<string, string>()
+    if (dbMatches) {
+        dbMatches.forEach(m => dbMatchStatusMap.set(m.id, m.status))
+    }
 
     const initials = profile?.avatar_initials ?? 'PL'
 
@@ -131,142 +125,12 @@ export default async function LeaderboardPage() {
                     </p>
                 </div>
 
-                <style>{`
-                    @media (max-width: 640px) {
-                        .hide-on-mobile { display: none !important; }
-                    }
-                `}</style>
-                <div style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 18,
-                    overflow: 'hidden',
-                }}>
-                    {/* Header */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', padding: '16px 20px',
-                        borderBottom: '1px solid var(--border)', background: 'var(--surface2)',
-                        fontSize: 11, fontWeight: 600, letterSpacing: 1.5,
-                        textTransform: 'uppercase', color: 'var(--muted)'
-                    }}>
-                        <div style={{ width: 40, textAlign: 'center' }}>Rank</div>
-                        <div style={{ flex: 1, paddingLeft: 16 }}>Player</div>
-                        <div className="hide-on-mobile" style={{ width: 130, textAlign: 'center' }}>Progress</div>
-                        <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Exact</div>
-                        <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Correct</div>
-                        <div style={{ width: 100, textAlign: 'right' }}>Total Pts</div>
-                    </div>
-
-                    {/* Rows */}
-                    {leaderboard.length === 0 ? (
-                        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                            No users have signed up yet.
-                        </div>
-                    ) : (
-                        leaderboard.map((row, index) => {
-                            const isMe = user && row.id === user.id
-                            const progressPct = Math.round((row.total_preds / TOTAL_MATCHES) * 100)
-
-                            // Progress status
-                            let progressColor = 'var(--muted)'
-                            let progressLabel = 'Not started'
-                            if (progressPct === 100) {
-                                progressColor = 'var(--green-bright)'
-                                progressLabel = 'Complete'
-                            } else if (progressPct > 0) {
-                                progressColor = 'var(--gold)'
-                                progressLabel = `${row.total_preds}/${TOTAL_MATCHES}`
-                            }
-
-                            return (
-                                <div key={row.id} style={{
-                                    display: 'flex', alignItems: 'center', padding: '14px 20px',
-                                    borderBottom: '1px solid var(--border)',
-                                    background: isMe ? 'rgba(212,168,67,0.06)' : 'transparent',
-                                    transition: 'background 0.15s',
-                                }}>
-                                    {/* Rank */}
-                                    <div style={{
-                                        width: 40, textAlign: 'center',
-                                        fontFamily: 'Bebas Neue', fontSize: 24,
-                                        color: index < 3 ? 'var(--gold)' : 'var(--muted)'
-                                    }}>
-                                        {index < 3 ? ['🥇', '🥈', '🥉'][index] : index + 1}
-                                    </div>
-
-                                    {/* Player */}
-                                    <div style={{ flex: 1, paddingLeft: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <img
-                                            src={getRobohashUrl(row.display_name, 60)}
-                                            alt={row.display_name}
-                                            style={{
-                                                width: 36, height: 36, borderRadius: '50%',
-                                                background: row.avatar_color,
-                                                flexShrink: 0,
-                                                objectFit: 'cover',
-                                            }}
-                                        />
-                                        <div>
-                                            <div style={{ fontSize: 15, fontWeight: 600, color: isMe ? 'var(--gold)' : 'var(--cream)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                {row.display_name}
-                                                {isMe && <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--gold)', color: '#000', borderRadius: 4, fontWeight: 700 }}>YOU</span>}
-                                            </div>
-                                            {row.streak > 0 && (
-                                                <div style={{ fontSize: 11, color: '#e05c4a', marginTop: 2 }}>
-                                                    🔥 {row.streak} streak
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Progress */}
-                                    <div className="hide-on-mobile" style={{ width: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                        <div style={{
-                                            width: '100%', height: 6, borderRadius: 3,
-                                            background: 'var(--surface3)', overflow: 'hidden',
-                                        }}>
-                                            <div style={{
-                                                height: '100%', borderRadius: 3,
-                                                background: progressPct === 100
-                                                    ? 'var(--green-bright)'
-                                                    : progressPct > 0
-                                                        ? 'var(--gold)'
-                                                        : 'transparent',
-                                                width: `${progressPct}%`,
-                                                transition: 'width 0.6s ease',
-                                            }} />
-                                        </div>
-                                        <div style={{
-                                            fontSize: 10, fontWeight: 600, color: progressColor,
-                                            letterSpacing: 0.5,
-                                        }}>
-                                            {progressLabel}
-                                        </div>
-                                    </div>
-
-                                    {/* Exact */}
-                                    <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                        {row.exact_scores}
-                                    </div>
-
-                                    {/* Correct */}
-                                    <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                        {row.correct_results}
-                                    </div>
-
-                                    {/* Total Points */}
-                                    <div style={{
-                                        width: 100, textAlign: 'right',
-                                        fontFamily: 'Bebas Neue', fontSize: 28,
-                                        color: row.total_points > 0 ? 'var(--cream)' : 'var(--muted)',
-                                    }}>
-                                        {row.total_points}
-                                    </div>
-                                </div>
-                            )
-                        })
-                    )}
-                </div>
+                <LeaderboardClient
+                    initialLeaderboard={leaderboard}
+                    predictions={allPredictions}
+                    currentUserId={user?.id}
+                    dbMatchStatuses={Object.fromEntries(dbMatchStatusMap)}
+                />
             </div>
         </div>
     )
