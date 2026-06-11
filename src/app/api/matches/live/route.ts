@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getTeam, TEAMS } from '@/lib/wc2026-data'
 
+let cachedMatches: any[] = []
+let cacheTimestamp: number = 0
+
 export async function GET() {
     try {
         // Fail fast if the external API hangs
@@ -10,7 +13,11 @@ export async function GET() {
         })
 
         if (!res.ok) {
-            return NextResponse.json({ matches: [] })
+            if (cachedMatches.length > 0) {
+                console.warn(`[Live API] External API failed with ${res.status}. Serving stale cache from ${new Date(cacheTimestamp).toISOString()}`)
+                return NextResponse.json({ matches: cachedMatches, stale: true })
+            }
+            return NextResponse.json({ error: 'External API failure' }, { status: 502 })
         }
 
         const data = await res.json()
@@ -83,8 +90,15 @@ export async function GET() {
             }
         })
 
+        cachedMatches = mappedMatches
+        cacheTimestamp = Date.now()
+
         return NextResponse.json({ matches: mappedMatches })
-    } catch {
-        return NextResponse.json({ matches: [] })
+    } catch (err: any) {
+        if (cachedMatches.length > 0) {
+            console.warn(`[Live API] Fetch threw an error: ${err?.message}. Serving stale cache from ${new Date(cacheTimestamp).toISOString()}`)
+            return NextResponse.json({ matches: cachedMatches, stale: true })
+        }
+        return NextResponse.json({ error: 'External API failure' }, { status: 502 })
     }
 }

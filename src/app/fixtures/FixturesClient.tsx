@@ -49,8 +49,10 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
         const fetchLive = async () => {
             try {
                 const res = await fetch('/api/matches/live', { cache: 'no-store' })
-                const data = await res.json()
-                setLiveMatches(data.matches || [])
+                if (res.ok) {
+                    const data = await res.json()
+                    setLiveMatches(data.matches || [])
+                }
             } catch { }
         }
         fetchLive()
