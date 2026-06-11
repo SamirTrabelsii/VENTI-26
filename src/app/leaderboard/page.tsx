@@ -121,7 +121,7 @@ export default async function LeaderboardPage() {
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
             <Nav initials={initials} isGuest={!user} />
 
-            <div style={{ maxWidth: 1000, margin: '0 auto', padding: '100px 40px 60px' }}>
+            <div style={{ maxWidth: 1000, margin: '0 auto', padding: '100px 5% 60px' }}>
                 <div style={{ marginBottom: 40, textAlign: 'center' }}>
                     <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 64, color: 'var(--cream)', letterSpacing: 1, lineHeight: 1 }}>
                         GLOBAL <span style={{ color: 'var(--gold)' }}>LEADERBOARD</span>
@@ -131,6 +131,11 @@ export default async function LeaderboardPage() {
                     </p>
                 </div>
 
+                <style>{`
+                    @media (max-width: 640px) {
+                        .hide-on-mobile { display: none !important; }
+                    }
+                `}</style>
                 <div style={{
                     background: 'var(--surface)',
                     border: '1px solid var(--border)',
@@ -146,9 +151,9 @@ export default async function LeaderboardPage() {
                     }}>
                         <div style={{ width: 40, textAlign: 'center' }}>Rank</div>
                         <div style={{ flex: 1, paddingLeft: 16 }}>Player</div>
-                        <div style={{ width: 130, textAlign: 'center' }}>Progress</div>
-                        <div style={{ width: 70, textAlign: 'center' }}>Exact</div>
-                        <div style={{ width: 70, textAlign: 'center' }}>Correct</div>
+                        <div className="hide-on-mobile" style={{ width: 130, textAlign: 'center' }}>Progress</div>
+                        <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Exact</div>
+                        <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Correct</div>
                         <div style={{ width: 100, textAlign: 'right' }}>Total Pts</div>
                     </div>
 
@@ -215,7 +220,7 @@ export default async function LeaderboardPage() {
                                     </div>
 
                                     {/* Progress */}
-                                    <div style={{ width: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                    <div className="hide-on-mobile" style={{ width: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                                         <div style={{
                                             width: '100%', height: 6, borderRadius: 3,
                                             background: 'var(--surface3)', overflow: 'hidden',
@@ -240,12 +245,12 @@ export default async function LeaderboardPage() {
                                     </div>
 
                                     {/* Exact */}
-                                    <div style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
+                                    <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
                                         {row.exact_scores}
                                     </div>
 
                                     {/* Correct */}
-                                    <div style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
+                                    <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
                                         {row.correct_results}
                                     </div>
 
