@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { usePredictions } from './PredictionContext'
 import KnockoutMatchCard from './KnockoutMatchCard'
 import { GROUPS, GROUP_MATCHES, R32_SLOTS, KNOCKOUT_MATCHES, getTeam, getTournamentPhase, isGlobalLockPassed } from '@/lib/wc2026-data'
@@ -134,7 +134,64 @@ function hasKnownFixture(slot?: Slot) {
     return !!getTeam(slot.home) && !!getTeam(slot.away)
 }
 
+interface RoundColumnProps {
+    round: Round
+    indices: number[]
+    slots: Slot[]
+    bracketPicks: Record<string, any>
+    viewMode: 'live' | 'original'
+    shouldUseFrozenOriginals: boolean
+    realKnockoutResults: Record<string, string | null>
+    canEditSlot: (round: Round, i: number, slot?: Slot) => boolean
+    handleChange: (round: Round, i: number, h: number | '', a: number | '', adv: string | null) => void
+}
+
+function RoundColumn({
+    round, indices, slots, bracketPicks, viewMode, shouldUseFrozenOriginals,
+    realKnockoutResults, canEditSlot, handleChange
+}: RoundColumnProps) {
+    const label = ROUND_CONFIG.find(r => r.key === round)?.label
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', width: 220, flexShrink: 0 }}>
+            <div style={{
+                textAlign: 'center', padding: '6px 4px 10px',
+                fontSize: 10, fontWeight: 600,
+                letterSpacing: 1.5, textTransform: 'uppercase',
+                color: 'var(--muted)',
+                borderBottom: '1px solid var(--border)',
+            }}>
+                {label}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: 16 }}>
+                {indices.map(i => {
+                    const slot = slots[i]
+                    const pickData = bracketPicks[`${round}_${i}`]
+                    const isLiveReprediction = viewMode === 'live' && pickData?.is_repredicted
+                    const visiblePickData = viewMode === 'live' && !isLiveReprediction ? undefined : pickData
+                    const disabled = !canEditSlot(round, i, slot)
+                    return (
+                        <div key={i} style={{ position: 'relative' }}>
+                            <KnockoutMatchCard
+                                matchId={`${round}_${i}`}
+                                homeCode={slot?.home ?? 'TBD'}
+                                awayCode={slot?.away ?? 'TBD'}
+                                homeScore={visiblePickData?.home_score ?? ''}
+                                awayScore={visiblePickData?.away_score ?? ''}
+                                advancingCode={viewMode === 'live' ? (isLiveReprediction ? pickData?.team_code ?? null : realKnockoutResults[`${round}_${i}`] || null) : viewMode === 'original' && shouldUseFrozenOriginals && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
+                                disabled={disabled}
+                                onChange={(_, h, a, adv) => handleChange(round, i, h, a, adv)}
+                            />
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
 export default function BracketSection() {
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const savedScrollPos = useRef(0); // use ref so no re-render is triggered
     const { groupScores, bracketPicks, setBracketPick } = usePredictions()
     const phase = getTournamentPhase()
     const [viewMode, setViewMode] = useState<'live' | 'original'>('original')
@@ -225,6 +282,12 @@ export default function BracketSection() {
         })
     }, [r32Slots, bracketPicks, viewMode, realState, shouldUseFrozenOriginals])
 
+    useEffect(() => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollLeft = savedScrollPos.current;
+        }
+    }, [bracketPicks]);
+
     const canEditSlot = useCallback((round: Round, slotIndex: number, slot?: Slot) => {
         if (viewMode === 'original') {
             return phase === 'PRE_TOURNAMENT'
@@ -234,6 +297,10 @@ export default function BracketSection() {
     }, [phase, viewMode])
 
     const handleChange = (round: Round, slotIndex: number, homeScore: number | '', awayScore: number | '', advancingTeam: string | null) => {
+        // Capture scroll position synchronously before state update
+        if (scrollContainerRef.current) {
+            savedScrollPos.current = scrollContainerRef.current.scrollLeft;
+        }
         const slot = getSlotsForRound(round)[slotIndex]
         if (!canEditSlot(round, slotIndex, slot)) return;
         let adv = advancingTeam
@@ -258,55 +325,18 @@ export default function BracketSection() {
         })
     }
 
-    const RoundColumn = ({ round, indices }: { round: Round, indices: number[] }) => {
-        const slots = getSlotsForRound(round)
-        const label = ROUND_CONFIG.find(r => r.key === round)?.label
-        
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', width: 220, flexShrink: 0 }}>
-                <div style={{
-                    textAlign: 'center', padding: '6px 4px 10px',
-                    fontSize: 10, fontWeight: 600,
-                    letterSpacing: 1.5, textTransform: 'uppercase',
-                    color: 'var(--muted)',
-                    borderBottom: '1px solid var(--border)',
-                    marginBottom: 10,
-                }}>
-                    {label}
-                </div>
-                <div style={{
-                    display: 'flex', flexDirection: 'column',
-                    justifyContent: 'space-around', flex: 1, gap: 16,
-                }}>
-                    {indices.map(i => {
-                        const slot = slots[i]
-                        const pickData = bracketPicks[`${round}_${i}`]
-                        const isLiveReprediction = viewMode === 'live' && pickData?.is_repredicted
-                        const visiblePickData = viewMode === 'live' && !isLiveReprediction ? undefined : pickData
-                        const disabled = !canEditSlot(round, i, slot)
-                        return (
-                            <div key={i} style={{ position: 'relative' }}>
-                                <KnockoutMatchCard
-                                    matchId={`${round}_${i}`}
-                                    homeCode={slot?.home ?? 'TBD'}
-                                    awayCode={slot?.away ?? 'TBD'}
-                                    homeScore={visiblePickData?.home_score ?? ''}
-                                    awayScore={visiblePickData?.away_score ?? ''}
-                                    advancingCode={viewMode === 'live' ? (isLiveReprediction ? pickData?.team_code ?? null : realState.knockoutResults[`${round}_${i}`] || null) : viewMode === 'original' && shouldUseFrozenOriginals && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
-                                    disabled={disabled}
-                                    onChange={(_, h, a, adv) => handleChange(round, i, h, a, adv)}
-                                />
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
-        )
-    }
-
     const champCodeRaw = bracketPicks['final_0']
     const champCode = viewMode === 'live' ? realState.knockoutResults['final_0'] : (viewMode === 'original' && shouldUseFrozenOriginals && champCodeRaw?.original_team_code ? champCodeRaw.original_team_code : champCodeRaw?.team_code)
     const championTeam = champCode && champCode !== 'TBD' ? getTeam(champCode) : null
+
+    const colProps = {
+        bracketPicks,
+        viewMode,
+        shouldUseFrozenOriginals,
+        realKnockoutResults: realState.knockoutResults,
+        canEditSlot,
+        handleChange,
+    }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', marginTop: 40 }}>
@@ -359,14 +389,14 @@ export default function BracketSection() {
                     : 'opens when real knockout fixtures are known. Each known match starts empty and can be re-predicted until that match kicks off.'}
             </div>
 
-            <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>
+            <div ref={scrollContainerRef} style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch' }}>
                 <div style={{ display: 'flex', gap: 16, minWidth: 2200, padding: '0 20px', alignItems: 'stretch' }}>
                     
                     {/* LEFT WING */}
-                    <RoundColumn round="r32" indices={[0,1,2,3,4,5,6,7]} />
-                    <RoundColumn round="r16" indices={[0,1,2,3]} />
-                    <RoundColumn round="qf" indices={[0,1]} />
-                    <RoundColumn round="sf" indices={[0]} />
+                    <RoundColumn {...colProps} round="r32" indices={[0,1,2,3,4,5,6,7]} slots={getSlotsForRound('r32')} />
+                    <RoundColumn {...colProps} round="r16" indices={[0,1,2,3]} slots={getSlotsForRound('r16')} />
+                    <RoundColumn {...colProps} round="qf" indices={[0,1]} slots={getSlotsForRound('qf')} />
+                    <RoundColumn {...colProps} round="sf" indices={[0]} slots={getSlotsForRound('sf')} />
 
                     {/* CENTER (Final, Champion, Third Place) */}
                     <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
@@ -407,20 +437,20 @@ export default function BracketSection() {
 
                         {/* Final Match */}
                         <div style={{ width: '100%', marginTop: 20 }}>
-                            <RoundColumn round="final" indices={[0]} />
+                            <RoundColumn {...colProps} round="final" indices={[0]} slots={getSlotsForRound('final')} />
                         </div>
 
                         {/* Third Place Match */}
                         <div style={{ width: '100%', marginTop: 20 }}>
-                            <RoundColumn round="third_place" indices={[0]} />
+                            <RoundColumn {...colProps} round="third_place" indices={[0]} slots={getSlotsForRound('third_place')} />
                         </div>
                     </div>
 
                     {/* RIGHT WING (Reverse Order) */}
-                    <RoundColumn round="sf" indices={[1]} />
-                    <RoundColumn round="qf" indices={[2,3]} />
-                    <RoundColumn round="r16" indices={[4,5,6,7]} />
-                    <RoundColumn round="r32" indices={[8,9,10,11,12,13,14,15]} />
+                    <RoundColumn {...colProps} round="sf" indices={[1]} slots={getSlotsForRound('sf')} />
+                    <RoundColumn {...colProps} round="qf" indices={[2,3]} slots={getSlotsForRound('qf')} />
+                    <RoundColumn {...colProps} round="r16" indices={[4,5,6,7]} slots={getSlotsForRound('r16')} />
+                    <RoundColumn {...colProps} round="r32" indices={[8,9,10,11,12,13,14,15]} slots={getSlotsForRound('r32')} />
                     
                 </div>
             </div>

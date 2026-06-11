@@ -188,7 +188,7 @@ export default async function DashboardPage() {
                             </div>
 
                             {/* Group stage progress */}
-                            <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                            <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
                                     <span>Group stage predictions</span>
                                     <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>{groupPct}%</span>
