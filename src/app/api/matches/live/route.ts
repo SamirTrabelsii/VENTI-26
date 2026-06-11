@@ -3,8 +3,10 @@ import { getTeam, TEAMS } from '@/lib/wc2026-data'
 
 export async function GET() {
     try {
+        // Fail fast if the external API hangs
         const res = await fetch('https://worldcup26.ir/get/games', {
             next: { revalidate: 30 }, // cache 30s
+            signal: AbortSignal.timeout(6000) // 4 second timeout
         })
 
         if (!res.ok) {

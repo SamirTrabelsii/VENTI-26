@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/pagination'
 import { scoreMatch } from '@/lib/scoring'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 
@@ -48,17 +49,15 @@ export async function GET(
         const slot = getKnockoutPickSlot(id)
         if (!slot) return NextResponse.json({ error: 'Unsupported knockout match id' }, { status: 400 })
 
-        const { data: bracketPicks, error } = await supabase
-            .from('bracket_picks')
-            .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, is_repredicted, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
-            .eq('round', slot.round)
-            .eq('slot_index', slot.slotIndex)
-            .not('home_score', 'is', null)
-            .not('away_score', 'is', null)
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 })
-        }
+        const bracketPicks = await fetchAllRows(
+            supabase
+                .from('bracket_picks')
+                .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, is_repredicted, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
+                .eq('round', slot.round)
+                .eq('slot_index', slot.slotIndex)
+                .not('home_score', 'is', null)
+                .not('away_score', 'is', null)
+        )
 
         const leaderboard = (bracketPicks ?? []).map(p => {
             const profile = Array.isArray(p.profile) ? p.profile[0] : p.profile
@@ -107,14 +106,12 @@ export async function GET(
     }
 
     // 3. Fetch all group-stage predictions for this match
-    const { data: predictions, error } = await supabase
-        .from('predictions')
-        .select('home_score, away_score, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
-        .eq('match_id', id)
-
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const predictions = await fetchAllRows(
+        supabase
+            .from('predictions')
+            .select('home_score, away_score, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
+            .eq('match_id', id)
+    )
 
     // 4. Calculate points when the match has a live/finished score.
     const leaderboard = (predictions ?? []).map(p => {

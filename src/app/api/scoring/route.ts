@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { scoreMatch } from '@/lib/scoring'
+import { fetchAllRows } from '@/lib/supabase/pagination'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/scoring
@@ -64,10 +65,12 @@ export async function POST(request: Request) {
     // ── 2. Load live predictions for this match ───────────────────────────────
     // If your predictions table has a qualifier_pick column, select it too.
     // Also select original scores and is_repredicted flag
-    const { data: predictions } = await supabase
-        .from('predictions')
-        .select('user_id, home_score, away_score, qualifier_pick, original_home_score, original_away_score, is_repredicted')
-        .eq('match_id', match_id)
+    const predictions = await fetchAllRows(
+        supabase
+            .from('predictions')
+            .select('user_id, home_score, away_score, qualifier_pick, original_home_score, original_away_score, is_repredicted')
+            .eq('match_id', match_id)
+    )
 
     // ── 2b. Load bracket picks for this match if it's a knockout ──────────────
     let bracketPicks: any[] = []
@@ -83,10 +86,12 @@ export async function POST(request: Request) {
         else if (round === 'sf') multiplier = 4
         else if (round === 'final') multiplier = 5
         
-        const { data: bp } = await supabase
-            .from('bracket_picks')
-            .select('user_id, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
-            .eq('round', round)
+        const bp = await fetchAllRows(
+            supabase
+                .from('bracket_picks')
+                .select('user_id, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
+                .eq('round', round)
+        )
             
         bracketPicks = bp || []
     }
@@ -174,10 +179,22 @@ export async function POST(request: Request) {
     }).filter(r => r !== null)
     const userIds = results.map(r => r.user_id)
 
-    const { data: memberships } = await supabase
-        .from('group_members')
-        .select('user_id, group_id')
-        .in('user_id', userIds)
+    // Need to handle userIds potentially being larger than max IN clause size
+    // So we'll fetch all group_members and filter, or batch it. 
+    // Since we want to ensure we don't hit 1000 row limits, fetching all memberships 
+    // for all involved users in batches is best.
+    const memberships = []
+    const batchSize = 100
+    for (let i = 0; i < userIds.length; i += batchSize) {
+        const batch = userIds.slice(i, i + batchSize)
+        const batchMemberships = await fetchAllRows(
+            supabase
+                .from('group_members')
+                .select('user_id, group_id')
+                .in('user_id', batch)
+        )
+        memberships.push(...batchMemberships)
+    }
 
     if (!memberships || memberships.length === 0) {
         return NextResponse.json({ message: 'No group memberships found', processed: 0 })
@@ -284,10 +301,12 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Match not found' }, { status: 404 })
     }
 
-    const { data: predictions } = await supabase
-        .from('predictions')
-        .select('user_id, home_score, away_score, qualifier_pick, profile:profiles(display_name)')
-        .eq('match_id', match_id)
+    const predictions = await fetchAllRows(
+        supabase
+            .from('predictions')
+            .select('user_id, home_score, away_score, qualifier_pick, profile:profiles(display_name)')
+            .eq('match_id', match_id)
+    )
 
     if (!predictions) {
         return NextResponse.json({ error: 'Could not load predictions' }, { status: 500 })
