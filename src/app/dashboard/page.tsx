@@ -258,8 +258,7 @@ export default async function DashboardPage() {
                 >
                     <QuickActions actions={[
                         { href: '/groups', icon: '👥', label: 'Groups & Leagues', sub: 'Compete against your friends' },
-                        { href: '/insights', icon: '🏆', label: 'The Palmares Room', sub: 'Unlock badges & trophies' },
-                        { href: '/rules', icon: '📖', label: 'Scoring Rules', sub: 'How points are calculated' }
+                        { href: '/insights', icon: '🏆', label: 'The Palmares Room', sub: 'Unlock badges & trophies' }
                     ]} />
 
                     {/* Live matches */}

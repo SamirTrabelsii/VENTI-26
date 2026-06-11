@@ -65,9 +65,9 @@ export default function KnockoutMatchCard({
         borderRadius: 10,
         color: 'var(--cream)',
         fontFamily: 'Bebas Neue, sans-serif',
-        fontSize: 28,
-        width: 52,
-        height: 52,
+        fontSize: 24,
+        width: 44,
+        height: 44,
         textAlign: 'center',
         outline: 'none',
         cursor: disabled || isHomeTBD || isAwayTBD ? 'default' : 'pointer',
@@ -79,8 +79,8 @@ export default function KnockoutMatchCard({
     const teamRowStyle: React.CSSProperties = {
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 14px',
+        gap: 8,
+        padding: '8px 12px',
     }
 
     return (
@@ -96,22 +96,13 @@ export default function KnockoutMatchCard({
                 borderBottom: '1px solid var(--border)',
             }}>
                 {homeTeam ? (
-                    <TeamFlag teamCode={homeTeam.code} size={28} />
+                    <TeamFlag teamCode={homeTeam.code} size={24} />
                 ) : (
-                    <span style={{ fontSize: 20, flexShrink: 0 }}>🏳️</span>
+                    <div style={{ width: 24, height: 16, borderRadius: 2, background: 'var(--surface3)', border: '1px solid var(--border)' }} />
                 )}
-                <span style={{
-                    fontWeight: 600,
-                    color: 'var(--cream)',
-                    fontSize: 13,
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    minWidth: 0,
-                }}>
-                    {homeTeam ? homeTeam.name : homeCode}
-                </span>
+                <div style={{ flex: 1, fontFamily: 'Bebas Neue', fontSize: 18, color: homeTeam ? 'var(--cream)' : 'var(--muted)', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {homeTeam ? homeTeam.name : (homeCode.startsWith('1') || homeCode.startsWith('2') || homeCode === 'T3' ? homeCode : 'TBD')}
+                </div>
 
                 <input
                     type="number"
@@ -142,22 +133,13 @@ export default function KnockoutMatchCard({
             {/* Away team row */}
             <div style={teamRowStyle}>
                 {awayTeam ? (
-                    <TeamFlag teamCode={awayTeam.code} size={28} />
+                    <TeamFlag teamCode={awayTeam.code} size={24} />
                 ) : (
-                    <span style={{ fontSize: 20, flexShrink: 0 }}>🏳️</span>
+                    <div style={{ width: 24, height: 16, borderRadius: 2, background: 'var(--surface3)', border: '1px solid var(--border)' }} />
                 )}
-                <span style={{
-                    fontWeight: 600,
-                    color: 'var(--cream)',
-                    fontSize: 13,
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    minWidth: 0,
-                }}>
-                    {awayTeam ? awayTeam.name : awayCode}
-                </span>
+                <div style={{ flex: 1, fontFamily: 'Bebas Neue', fontSize: 18, color: awayTeam ? 'var(--cream)' : 'var(--muted)', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {awayTeam ? awayTeam.name : (awayCode.startsWith('1') || awayCode.startsWith('2') || awayCode === 'T3' ? awayCode : 'TBD')}
+                </div>
 
                 <input
                     type="number"
@@ -188,17 +170,17 @@ export default function KnockoutMatchCard({
             {/* Tie-breaker UI */}
             {isTied && !isHomeTBD && !isAwayTBD && (
                 <div style={{
-                    padding: '10px 14px',
+                    padding: '8px 10px',
                     borderTop: '1px dashed var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: 8
+                    gap: 6
                 }}>
-                    <div style={{ fontSize: 10, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>
+                    <div style={{ fontSize: 9, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>
                         Advances on Penalties
                     </div>
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                         {[
                             { code: homeCode, team: homeTeam },
                             { code: awayCode, team: awayTeam },

@@ -56,23 +56,35 @@ export default async function LeaderboardPage() {
         }
     }
 
-    // 3. Fetch group prediction counts per user
-    const { data: groupPredData } = await supabase
-        .from('predictions')
-        .select('user_id')
+    // Helper to fetch all rows beyond 1000 limit
+    async function fetchAllUserIds(table: string) {
+        const allData: any[] = []
+        let hasMore = true
+        let start = 0
+        while (hasMore) {
+            const { data } = await supabase.from(table).select('user_id').range(start, start + 999)
+            if (data && data.length > 0) {
+                allData.push(...data)
+                start += 1000
+                if (data.length < 1000) hasMore = false
+            } else {
+                hasMore = false
+            }
+        }
+        return allData
+    }
 
+    // 3. Fetch group prediction counts per user
+    const groupPredData = await fetchAllUserIds('predictions')
     const groupPredCounts = new Map<string, number>()
-    for (const row of (groupPredData || [])) {
+    for (const row of groupPredData) {
         groupPredCounts.set(row.user_id, (groupPredCounts.get(row.user_id) ?? 0) + 1)
     }
 
     // 4. Fetch bracket prediction counts per user
-    const { data: bracketPredData } = await supabase
-        .from('bracket_picks')
-        .select('user_id')
-
+    const bracketPredData = await fetchAllUserIds('bracket_picks')
     const bracketPredCounts = new Map<string, number>()
-    for (const row of (bracketPredData || [])) {
+    for (const row of bracketPredData) {
         bracketPredCounts.set(row.user_id, (bracketPredCounts.get(row.user_id) ?? 0) + 1)
     }
 

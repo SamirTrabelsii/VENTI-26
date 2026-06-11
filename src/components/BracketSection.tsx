@@ -263,7 +263,7 @@ export default function BracketSection() {
         const label = ROUND_CONFIG.find(r => r.key === round)?.label
         
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', width: 300, flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', width: 220, flexShrink: 0 }}>
                 <div style={{
                     textAlign: 'center', padding: '6px 4px 10px',
                     fontSize: 10, fontWeight: 600,
@@ -360,7 +360,7 @@ export default function BracketSection() {
             </div>
 
             <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>
-                <div style={{ display: 'flex', gap: 24, minWidth: 2800, padding: '0 20px', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', gap: 16, minWidth: 2200, padding: '0 20px', alignItems: 'stretch' }}>
                     
                     {/* LEFT WING */}
                     <RoundColumn round="r32" indices={[0,1,2,3,4,5,6,7]} />
@@ -369,7 +369,7 @@ export default function BracketSection() {
                     <RoundColumn round="sf" indices={[0]} />
 
                     {/* CENTER (Final, Champion, Third Place) */}
-                    <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+                    <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
                         <div style={{
                             textAlign: 'center', padding: '6px 4px 10px', width: '100%',
                             fontSize: 10, fontWeight: 600,
