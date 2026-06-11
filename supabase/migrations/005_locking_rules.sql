@@ -17,8 +17,8 @@ BEGIN
     -- Knockout match IDs start with r, q, s, f (e.g. 'r32_1', 'qf_1', 'sf_1', 'final')
     is_knockout := NEW.match_id ~ '^(r32|r16|qf|sf|final)';
 
-    -- Phase 1: PRE_TOURNAMENT (< June 11 14:00 UTC)
-    IF now() < '2026-06-11 14:00:00+00'::timestamp with time zone THEN
+    -- Phase 1: PRE_TOURNAMENT (< June 11 19:00 UTC)
+    IF now() < '2026-06-11 19:00:00+00'::timestamp with time zone THEN
         NEW.original_home_score = NEW.home_score;
         NEW.original_away_score = NEW.away_score;
         NEW.is_repredicted = false;
@@ -60,7 +60,7 @@ CREATE OR REPLACE FUNCTION handle_bracket_upsert()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Phase 1: PRE_TOURNAMENT
-    IF now() < '2026-06-11 14:00:00+00'::timestamp with time zone THEN
+    IF now() < '2026-06-11 19:00:00+00'::timestamp with time zone THEN
         NEW.original_team_code = NEW.team_code;
         NEW.is_repredicted = false;
 

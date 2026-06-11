@@ -85,7 +85,7 @@ export const GROUP_MATCHES: MatchData[] = [
         "away_team": "RSA",
         "home_flag": "mx",
         "away_flag": "za",
-        "kickoff": "2026-06-11T13:00:00.000Z",
+        "kickoff": "2026-06-11T19:00:00.000Z",
         "venue": "Estadio Azteca",
         "city": "Mexico City, Mexico"
     },
@@ -1462,7 +1462,7 @@ export function getRobohashUrl(seed: string, size: number = 100): string {
     return `https://robohash.org/${encoded}.png?set=set1&size=${size}x${size}`
 }
 
-export const TOURNAMENT_LOCK = '2026-06-11T13:00:00Z' // Opening kickoff: all original predictions lock
+export const TOURNAMENT_LOCK = '2026-06-11T19:00:00Z' // Opening kickoff: all original predictions lock
 export const KNOCKOUT_FINAL_LOCK = '2026-07-19T15:00:00Z' // Final kickoff: all live bracket predictions closed
 
 export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {

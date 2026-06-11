@@ -13,7 +13,7 @@ BEGIN
     is_knockout := NEW.match_id ~ '^(r32|r16|qf|sf|third_place|final)';
 
     -- Phase 1: PRE_TOURNAMENT (< opening kickoff)
-    IF now() < '2026-06-11 13:00:00+00'::timestamp with time zone THEN
+    IF now() < '2026-06-11 19:00:00+00'::timestamp with time zone THEN
         NEW.original_home_score = NEW.home_score;
         NEW.original_away_score = NEW.away_score;
         NEW.is_repredicted = false;
@@ -68,7 +68,7 @@ DECLARE
     fixture_away TEXT;
 BEGIN
     -- Phase 1: PRE_TOURNAMENT
-    IF now() < '2026-06-11 13:00:00+00'::timestamp with time zone THEN
+    IF now() < '2026-06-11 19:00:00+00'::timestamp with time zone THEN
         NEW.original_team_code = NEW.team_code;
         NEW.is_repredicted = false;
 

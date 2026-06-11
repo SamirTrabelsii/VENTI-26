@@ -140,6 +140,8 @@ export default function BracketSection() {
     const [viewMode, setViewMode] = useState<'live' | 'original'>('original')
     const realState = useRealTournament()
 
+    const shouldUseFrozenOriginals = isGlobalLockPassed()
+
     // If viewing original, construct a fake groupScores object using original_home/away
     const effectiveGroupScores = useMemo(() => {
         if (viewMode === 'live') {
@@ -152,7 +154,6 @@ export default function BracketSection() {
         }
         
         const original: typeof groupScores = {}
-        const shouldUseFrozenOriginals = isGlobalLockPassed()
         for (const [id, s] of Object.entries(groupScores)) {
             original[id] = { 
                 ...s, 
@@ -161,7 +162,7 @@ export default function BracketSection() {
             }
         }
         return computeGroupStandings(original)
-    }, [groupScores, viewMode, realState])
+    }, [groupScores, viewMode, realState, shouldUseFrozenOriginals])
 
     // Base R32 slots derived from effective scores
     const r32Slots = useMemo(() => buildR32Slots(effectiveGroupScores), [effectiveGroupScores])
@@ -187,8 +188,8 @@ export default function BracketSection() {
             const sf1_home = qf2_pick && qf2_pick !== 'TBD' ? qf2_pick : 'TBD'
             const sf1_away = qf3_pick && qf3_pick !== 'TBD' ? qf3_pick : 'TBD'
 
-            const sf0_winner = viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && sf0_pick?.original_team_code ? sf0_pick.original_team_code : sf0_pick?.team_code)
-            const sf1_winner = viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && sf1_pick?.original_team_code ? sf1_pick.original_team_code : sf1_pick?.team_code)
+            const sf0_winner = viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && shouldUseFrozenOriginals && sf0_pick?.original_team_code ? sf0_pick.original_team_code : sf0_pick?.team_code)
+            const sf1_winner = viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && shouldUseFrozenOriginals && sf1_pick?.original_team_code ? sf1_pick.original_team_code : sf1_pick?.team_code)
 
             let third_home = 'TBD'
             if (sf0_winner === sf0_home) third_home = sf0_away
@@ -207,8 +208,8 @@ export default function BracketSection() {
         // Final derives from SF
         if (round === 'final') {
             return [{
-                home: (viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && bracketPicks['sf_0']?.original_team_code ? bracketPicks['sf_0'].original_team_code : bracketPicks['sf_0']?.team_code)) ?? 'TBD',
-                away: (viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && bracketPicks['sf_1']?.original_team_code ? bracketPicks['sf_1'].original_team_code : bracketPicks['sf_1']?.team_code)) ?? 'TBD'
+                home: (viewMode === 'live' ? realState.knockoutResults['sf_0'] : (viewMode === 'original' && shouldUseFrozenOriginals && bracketPicks['sf_0']?.original_team_code ? bracketPicks['sf_0'].original_team_code : bracketPicks['sf_0']?.team_code)) ?? 'TBD',
+                away: (viewMode === 'live' ? realState.knockoutResults['sf_1'] : (viewMode === 'original' && shouldUseFrozenOriginals && bracketPicks['sf_1']?.original_team_code ? bracketPicks['sf_1'].original_team_code : bracketPicks['sf_1']?.team_code)) ?? 'TBD'
             }]
         }
 
@@ -218,11 +219,11 @@ export default function BracketSection() {
             const p1 = bracketPicks[`${prevRound.key}_${matchIndex1}`]
             const p2 = bracketPicks[`${prevRound.key}_${matchIndex2}`]
             return {
-                home: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex1}`] : (viewMode === 'original' && p1?.original_team_code ? p1.original_team_code : p1?.team_code)) ?? 'TBD',
-                away: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex2}`] : (viewMode === 'original' && p2?.original_team_code ? p2.original_team_code : p2?.team_code)) ?? 'TBD'
+                home: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex1}`] : (viewMode === 'original' && shouldUseFrozenOriginals && p1?.original_team_code ? p1.original_team_code : p1?.team_code)) ?? 'TBD',
+                away: (viewMode === 'live' ? realState.knockoutResults[`${prevRound.key}_${matchIndex2}`] : (viewMode === 'original' && shouldUseFrozenOriginals && p2?.original_team_code ? p2.original_team_code : p2?.team_code)) ?? 'TBD'
             }
         })
-    }, [r32Slots, bracketPicks, viewMode, realState])
+    }, [r32Slots, bracketPicks, viewMode, realState, shouldUseFrozenOriginals])
 
     const canEditSlot = useCallback((round: Round, slotIndex: number, slot?: Slot) => {
         if (viewMode === 'original') {
@@ -291,7 +292,7 @@ export default function BracketSection() {
                                     awayCode={slot?.away ?? 'TBD'}
                                     homeScore={visiblePickData?.home_score ?? ''}
                                     awayScore={visiblePickData?.away_score ?? ''}
-                                    advancingCode={viewMode === 'live' ? (isLiveReprediction ? pickData?.team_code ?? null : realState.knockoutResults[`${round}_${i}`] || null) : viewMode === 'original' && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
+                                    advancingCode={viewMode === 'live' ? (isLiveReprediction ? pickData?.team_code ?? null : realState.knockoutResults[`${round}_${i}`] || null) : viewMode === 'original' && shouldUseFrozenOriginals && pickData?.original_team_code ? pickData.original_team_code : pickData?.team_code || null}
                                     disabled={disabled}
                                     onChange={(_, h, a, adv) => handleChange(round, i, h, a, adv)}
                                 />
@@ -304,7 +305,7 @@ export default function BracketSection() {
     }
 
     const champCodeRaw = bracketPicks['final_0']
-    const champCode = viewMode === 'live' ? realState.knockoutResults['final_0'] : (viewMode === 'original' && champCodeRaw?.original_team_code ? champCodeRaw.original_team_code : champCodeRaw?.team_code)
+    const champCode = viewMode === 'live' ? realState.knockoutResults['final_0'] : (viewMode === 'original' && shouldUseFrozenOriginals && champCodeRaw?.original_team_code ? champCodeRaw.original_team_code : champCodeRaw?.team_code)
     const championTeam = champCode && champCode !== 'TBD' ? getTeam(champCode) : null
 
     return (
