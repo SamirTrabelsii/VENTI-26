@@ -1482,15 +1482,8 @@ export function isGlobalLockPassed(): boolean {
     return getTournamentPhase() !== 'PRE_TOURNAMENT'
 }
 
-/**
- * The raw data strings (e.g. 13:00Z) are exactly 8 hours behind the target GMT+1 display time (21:00 GMT+1).
- * To make a 13:00Z string display as 21:00 in GMT+1, we add 7 hours to the underlying UTC Date
- * (13:00 + 7h = 20:00 UTC -> +1 timezone offset = 21:00 GMT+1).
- */
 export function getAdjustedKickoff(utcString: string): Date {
-    const d = new Date(utcString)
-    d.setHours(d.getHours() + 7)
-    return d
+    return new Date(utcString)
 }
 
 export const POINTS = {

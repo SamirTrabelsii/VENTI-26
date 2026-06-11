@@ -78,12 +78,12 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
         for (const m of sorted) {
             const d = getAdjustedKickoff(m.kickoff)
             // Key on the ISO date in GMT+1 — e.g. "2026-06-11" (never shifts day across midnight)
-            const isoDate = d.toLocaleDateString('en-CA', { timeZone: 'Etc/GMT-1' }) // YYYY-MM-DD
+            const isoDate = d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }) // YYYY-MM-DD
             const dateLabel = d.toLocaleDateString('en-US', {
                 weekday: 'long',
                 month: 'long',
                 day: 'numeric',
-                timeZone: 'Etc/GMT-1',
+                timeZone: 'Europe/Paris',
             })
             const existing = result.find(g => g.isoDate === isoDate)
             if (existing) {
@@ -263,7 +263,7 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
                                                 <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green-bright)', letterSpacing: 1 }}>FT</span>
                                             ) : (
                                                 <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
-                                                    {getAdjustedKickoff(m.kickoff).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Etc/GMT-1' })} <span style={{ fontSize: 9, opacity: 0.7 }}>GMT+1</span>
+                                                    {getAdjustedKickoff(m.kickoff).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris' })} <span style={{ fontSize: 9, opacity: 0.7 }}>CET/CEST</span>
                                                 </span>
                                             )}
                                         </div>

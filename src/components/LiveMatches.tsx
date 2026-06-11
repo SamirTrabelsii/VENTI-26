@@ -65,8 +65,8 @@ const getStatusStyle = (status: string) => {
 
 const formatKickoff = (utc: string) => {
     const d = getAdjustedKickoff(utc)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Etc/GMT-1' }) + ' · ' +
-        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Etc/GMT-1' }) + ' GMT+1'
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Europe/Paris' }) + ' · ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris' }) + ' CET/CEST'
 }
 
 const formatGroup = (g?: string) =>
@@ -221,8 +221,8 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                         ) : (
                             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
                                 {getAdjustedKickoff(m.utcDate).toLocaleTimeString('en-US', {
-                                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Etc/GMT-1'
-                                })} <span style={{ fontSize: 10, opacity: 0.7 }}>GMT+1</span>
+                                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris'
+                                })} <span style={{ fontSize: 10, opacity: 0.7 }}>CET/CEST</span>
                             </span>
                         )}
                     </div>
@@ -290,7 +290,7 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                 </div>
                 {lastUpdated && (
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                        Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT-1' })}
+                        Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}
                     </span>
                 )}
             </div>

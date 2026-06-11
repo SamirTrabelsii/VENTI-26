@@ -61,8 +61,8 @@ const getStatusStyle = (status: string) => {
 
 const formatKickoff = (utc: string) => {
     const d = getAdjustedKickoff(utc)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Etc/GMT-1' }) + ' · ' +
-        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Etc/GMT-1' }) + ' GMT+1'
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Europe/Paris' }) + ' · ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris' }) + ' CET/CEST'
 }
 
 const formatGroup = (g?: string) =>
