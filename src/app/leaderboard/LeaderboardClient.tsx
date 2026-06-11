@@ -77,7 +77,8 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
         }).filter(m => m.dbId)
 
         return initialLeaderboard.map(user => {
-            let livePointsBonus = 0
+            let activeLiveBonus = 0
+            let pendingFinishedBonus = 0
 
             for (const lm of activeMatchesWithDbId) {
                 // Find prediction for this user and match
@@ -86,15 +87,19 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
                 // If points are already synced in DB, the backend sync has happened! So don't add live points!
                 if (pred && !isSyncedToDb && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
                     const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
-                    livePointsBonus += res.total
+                    
+                    if (lm.status === 'FINISHED') {
+                        pendingFinishedBonus += res.total
+                    } else {
+                        activeLiveBonus += res.total
+                    }
                 }
             }
 
             return {
                 ...user,
-                livePointsBonus,
-                // Do not permanently add it to total_points here, we keep it separate to show a nice "+X" UI
-                display_points: user.total_points + livePointsBonus
+                display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
+                live_bonus: activeLiveBonus
             }
         }).sort((a, b) =>
             b.display_points - a.display_points
@@ -231,9 +236,9 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
                                 }}>
                                     {row.display_points}
                                 </div>
-                                {row.livePointsBonus > 0 && (
+                                {row.live_bonus > 0 && (
                                     <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', marginTop: 2, background: 'rgba(212,168,67,0.1)', padding: '2px 6px', borderRadius: 4 }}>
-                                        +{row.livePointsBonus} LIVE
+                                        +{row.live_bonus} LIVE
                                     </div>
                                 )}
                             </div>

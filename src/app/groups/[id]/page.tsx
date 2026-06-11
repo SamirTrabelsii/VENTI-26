@@ -1,10 +1,13 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase/client'
-import { getRobohashUrl } from '@/lib/wc2026-data'
+import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
+import { scoreMatch } from '@/lib/scoring'
+
+const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
 interface MemberScore {
     user_id: string
@@ -14,6 +17,8 @@ interface MemberScore {
     streak: number
     display_name: string
     joined_at: string
+    display_points?: number
+    live_bonus?: number
 }
 
 interface GroupData {
@@ -56,6 +61,11 @@ export default function GroupDetailPage() {
     const [initials, setInitials] = useState('PL')
     const [loading, setLoading] = useState(true)
     const [leaving, setLeaving] = useState(false)
+    
+    // Live points states
+    const [predictions, setPredictions] = useState<any[]>([])
+    const [dbMatchStatuses, setDbMatchStatuses] = useState<Record<string, string>>({})
+    const [liveMatches, setLiveMatches] = useState<any[]>([])
 
     const load = useCallback(async (_uid: string) => {
         // Group info
@@ -98,6 +108,28 @@ export default function GroupDetailPage() {
         // Sort by points descending
         merged.sort((a, b) => b.total_points - a.total_points)
         setScores(merged)
+
+        // Fetch predictions for these members for live points
+        const memberIds = members.map(m => m.user_id)
+        if (memberIds.length > 0) {
+            // Batch this safely just in case
+            const preds: any[] = []
+            for (let i = 0; i < memberIds.length; i += 100) {
+                const batch = memberIds.slice(i, i + 100)
+                const { data } = await supabase
+                    .from('predictions')
+                    .select('user_id, match_id, home_score, away_score')
+                    .in('user_id', batch)
+                if (data) preds.push(...data)
+            }
+            setPredictions(preds)
+        }
+
+        // Fetch DB match status
+        const { data: dbM } = await supabase.from('matches').select('id, status')
+        const statusMap: Record<string, string> = {}
+        dbM?.forEach(m => statusMap[m.id] = m.status)
+        setDbMatchStatuses(statusMap)
     }, [id, supabase, router])
 
     useEffect(() => {
@@ -116,6 +148,22 @@ export default function GroupDetailPage() {
         }
         init()
     }, [load, router])
+
+    // Poll live matches every 60s
+    useEffect(() => {
+        const fetchLive = async () => {
+            try {
+                const res = await fetch('/api/matches/live', { cache: 'no-store' })
+                if (res.ok) {
+                    const data = await res.json()
+                    setLiveMatches(data.matches || [])
+                }
+            } catch { }
+        }
+        fetchLive()
+        const int = setInterval(fetchLive, 60_000)
+        return () => clearInterval(int)
+    }, [])
 
     // Real-time scores subscription
     useEffect(() => {
@@ -142,6 +190,45 @@ export default function GroupDetailPage() {
         router.push('/groups')
     }
 
+    // Calculate dynamic scores with live points
+    const dynamicScores = useMemo(() => {
+        const activeLiveMatches = liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED')
+        
+        const activeMatchesWithDbId = activeLiveMatches.map(lm => {
+            const dbMatch = ALL_MATCHES.find(m => m.home_team === lm.homeTeam.tla && m.away_team === lm.awayTeam.tla)
+            return {
+                ...lm,
+                dbId: dbMatch?.id,
+                isKo: dbMatch ? ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label) : false
+            }
+        }).filter(m => m.dbId)
+
+        return scores.map(user => {
+            let activeLiveBonus = 0
+            let pendingFinishedBonus = 0
+
+            for (const lm of activeMatchesWithDbId) {
+                const pred = predictions.find(p => p.user_id === user.user_id && p.match_id === lm.dbId)
+                const isSyncedToDb = dbMatchStatuses[lm.dbId] === 'finished'
+                if (pred && !isSyncedToDb && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
+                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
+                    
+                    if (lm.status === 'FINISHED') {
+                        pendingFinishedBonus += res.total
+                    } else {
+                        activeLiveBonus += res.total
+                    }
+                }
+            }
+
+            return {
+                ...user,
+                display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
+                live_bonus: activeLiveBonus
+            }
+        }).sort((a, b) => (b.display_points || 0) - (a.display_points || 0))
+    }, [scores, liveMatches, predictions, dbMatchStatuses])
+
     if (loading) {
         return (
             <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
@@ -155,8 +242,8 @@ export default function GroupDetailPage() {
 
     if (!group) return null
 
-    const myEntry = scores.find(s => s.user_id === userId)
-    const myRank = myEntry ? scores.indexOf(myEntry) + 1 : null
+    const myEntry = dynamicScores.find(s => s.user_id === userId)
+    const myRank = myEntry ? dynamicScores.indexOf(myEntry) + 1 : null
     const RANK_COLORS = ['#d4a843', '#b0b8c8', '#cd7f32']
 
     const shareText = `Join my World Cup 2026 prediction group "${group.name}"!\nCode: ${group.invite_code}\nSign up at venti26.app`
@@ -192,7 +279,7 @@ export default function GroupDetailPage() {
                                     <p style={{ fontSize: 14, color: 'var(--dim)' }}>{group.description}</p>
                                 )}
                                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                                    {scores.length} {scores.length === 1 ? 'member' : 'members'}
+                                    {dynamicScores.length} {dynamicScores.length === 1 ? 'member' : 'members'}
                                 </p>
                             </div>
 
@@ -212,7 +299,7 @@ export default function GroupDetailPage() {
                                         #{myRank}
                                     </div>
                                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                                        of {scores.length}
+                                        of {dynamicScores.length}
                                     </div>
                                 </div>
                             )}
@@ -259,7 +346,7 @@ export default function GroupDetailPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
                         {[
                             { label: 'Your rank', value: `#${myRank}`, accent: 'var(--gold)' },
-                            { label: 'Points', value: myEntry.total_points, accent: 'var(--green-bright)' },
+                            { label: 'Points', value: myEntry.display_points, accent: 'var(--green-bright)' },
                             { label: 'Exact scores', value: myEntry.exact_scores, accent: 'var(--blue-accent)' },
                             { label: 'Streak', value: `${myEntry.streak} 🔥`, accent: '#e05c4a' },
                         ].map(s => (
@@ -299,11 +386,11 @@ export default function GroupDetailPage() {
                             </span>
                         </div>
                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                            {scores.length} players
+                            {dynamicScores.length} players
                         </span>
                     </div>
 
-                    {scores.length === 0 ? (
+                    {dynamicScores.length === 0 ? (
                         <div style={{ padding: '48px 20px', textAlign: 'center' }}>
                             <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
                             <p style={{ fontSize: 14, color: 'var(--muted)' }}>
@@ -318,7 +405,7 @@ export default function GroupDetailPage() {
                             </a>
                         </div>
                     ) : (
-                        scores.map((s, i) => {
+                        dynamicScores.map((s: MemberScore, i: number) => {
                             const isMe = s.user_id === userId
                             const rankColor = i < 3 ? RANK_COLORS[i] : 'var(--muted)'
                             const rankIcon = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
@@ -370,17 +457,22 @@ export default function GroupDetailPage() {
                                         </div>
                                     </div>
 
-                                    {/* Points */}
-                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
                                         <div style={{
                                             fontFamily: 'Bebas Neue', fontSize: 32,
-                                            color: isMe ? 'var(--gold)' : 'var(--cream)',
+                                            color: isMe ? 'var(--gold)' : 'var(--cream)', lineHeight: 1
                                         }}>
-                                            {s.total_points}
+                                            {s.display_points}
                                         </div>
-                                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)' }}>
-                                            pts
-                                        </div>
+                                        {s.live_bonus && s.live_bonus > 0 ? (
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', marginTop: 2, background: 'rgba(212,168,67,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                                +{s.live_bonus} LIVE
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)', marginTop: 4 }}>
+                                                pts
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )
