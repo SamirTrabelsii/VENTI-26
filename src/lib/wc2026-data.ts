@@ -1462,7 +1462,7 @@ export function getRobohashUrl(seed: string, size: number = 100): string {
     return `https://robohash.org/${encoded}.png?set=set1&size=${size}x${size}`
 }
 
-export const TOURNAMENT_LOCK = '2026-06-12T20:00:00Z' // Second kickoff: all original predictions lock
+export const TOURNAMENT_LOCK = '2026-06-13T00:00:00Z' // Second kickoff: all original predictions lock
 export const KNOCKOUT_FINAL_LOCK = '2026-07-19T15:00:00Z' // Final kickoff: all live bracket predictions closed
 
 export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {

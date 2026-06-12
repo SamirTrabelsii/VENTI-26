@@ -22,7 +22,7 @@ export default function ScoringRulesDrawer({ customTrigger }: { customTrigger?: 
             ) : (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50 flex items-center gap-2 group hover:scale-105 transition-all duration-300"
+                    className="fixed bottom-24 right-6 md:bottom-10 md:right-10 z-50 flex items-center gap-2 group hover:scale-105 transition-all duration-300"
                     style={{
                         padding: '12px 24px',
                         borderRadius: '100px',
