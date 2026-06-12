@@ -521,7 +521,7 @@ function UsersTab() {
         const res = await fetch('/api/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'reset_password', user_id: userId }),
+            body: JSON.stringify({ action: 'reset_password', user_id: userId, display_name: name }),
         })
         const data = await res.json()
         if (res.ok) {

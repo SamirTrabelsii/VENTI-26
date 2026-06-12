@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
-    const { action, user_id } = body
+    const { action, user_id, display_name } = body
 
     if (!['reset', 'reset_password'].includes(action) || !user_id) {
         return NextResponse.json({ error: 'Invalid action or missing user_id' }, { status: 400 })
@@ -118,7 +118,9 @@ export async function POST(request: Request) {
     const db = createAdminClient()
 
     if (action === 'reset_password') {
-        const temporaryPassword = generateTemporaryPassword()
+        const temporaryPassword = display_name 
+            ? (display_name.length < 6 ? display_name.padEnd(6, '123456') : display_name) 
+            : generateTemporaryPassword()
         const { error } = await db.auth.admin.updateUserById(user_id, {
             password: temporaryPassword,
         })
