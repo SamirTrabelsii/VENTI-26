@@ -1447,13 +1447,13 @@ export function getFlagUrl(teamCode: string): string | undefined {
     if (!t) return undefined
     // For TBD or non-iso2, we can just return undefined or a generic flag
     if (t.iso2 === '🏳️' || t.iso2 === '') return undefined
-    
+
     // Handle home nations for flagcdn
     let iso2 = t.iso2
     if (t.iso2 === 'eng') iso2 = 'gb-eng'
     if (t.iso2 === 'sco') iso2 = 'gb-sct'
     if (t.iso2 === 'wal') iso2 = 'gb-wls'
-    
+
     return "https://flagcdn.com/w80/" + iso2 + ".png"
 }
 
@@ -1462,7 +1462,7 @@ export function getRobohashUrl(seed: string, size: number = 100): string {
     return `https://robohash.org/${encoded}.png?set=set1&size=${size}x${size}`
 }
 
-export const TOURNAMENT_LOCK = '2026-06-12T03:00:00Z' // Second kickoff: all original predictions lock
+export const TOURNAMENT_LOCK = '2026-06-12T20:00:00Z' // Second kickoff: all original predictions lock
 export const KNOCKOUT_FINAL_LOCK = '2026-07-19T15:00:00Z' // Final kickoff: all live bracket predictions closed
 
 export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {
