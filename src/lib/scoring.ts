@@ -7,23 +7,23 @@
 // ├─────────────────────────────────────────────────────────────────────────┤
 // │  +25  Exact scoreline          e.g. predicted 2-1, result 2-1          │
 // │  +10  Correct outcome          right winner OR right draw, wrong score  │
-// │  + 5  Correct goal difference  only when outcome correct + not a draw   │
-// │  + 1  Correct goals one team   per team, NOT awarded on exact score     │
+// │  + 5  Correct goal difference  only when outcome correct                │
+// │  +N   Correct goals one team   N = goals scored (min 1), per team       │
+// │                                NOT awarded on exact score               │
 // ├─────────────────────────────────────────────────────────────────────────┤
 // │  KNOCKOUT SUPPLEMENT (draws that go to penalties)                       │
 // │  +10  Correct qualifier        team that actually advances              │
 // │                                                                         │
-// │  Max per knockout match = 35 pts (25 exact + 10 qualifier)              │
 // │  The qualifier bonus ONLY applies when the 90-min result is a draw      │
 // │  and the match goes to extra time / penalties.                          │
 // ├─────────────────────────────────────────────────────────────────────────┤
 // │  WORKED EXAMPLES                                                        │
 // │  Pred 2-1 / Real 2-1               → +25 (exact)                       │
 // │  Pred 3-1 / Real 2-0               → +10 +5 = +15 (outcome+diff)       │
-// │  Pred 3-1 / Real 2-1               → +10 +0 +1 = +11 (out+away goal)   │
-// │  Pred 2-1 / Real 2-3               → +1 (home goals = 2 in both)       │
-// │  Pred 1-1 / Real 0-0               → +10 (draw, no diff rule)          │
-// │  Pred 2-0 / Real 1-0               → +10 +5 +1 = +16 (out+diff+away)   │
+// │  Pred 3-1 / Real 2-1               → +10 +1 = +11 (out+away goal=1)    │
+// │  Pred 2-1 / Real 2-3               → +2 (home goals = 2)               │
+// │  Pred 1-1 / Real 0-0               → +10 +5 = +15 (out+diff)           │
+// │  Pred 3-0 / Real 3-1               → +10 +3 = +13 (out+home goals=3)   │
 // │  Pred 2-2 / Real 2-2 / qual ✓      → +25 +10 = +35 (exact+qualifier)   │
 // │  Pred 2-2 / Real 2-2 / qual ✗      → +25 (exact, wrong qualifier)      │
 // │  Pred 1-1 / Real 0-0 / qual ✓      → +10 +10 = +20 (draw+qualifier)    │
@@ -93,23 +93,22 @@ function coreScore(
     if (predOutcome === realOutcome) {
         bd.push({ rule: 'Correct outcome', pts: POINTS.CORRECT_OUTCOME })
 
-        // ── Rule 3: Goal difference (non-draws only) ─────────────────────────
-        if (predOutcome !== 0) {
-            const predDiff = Math.abs(predHome - predAway)
-            const realDiff = Math.abs(realHome - realAway)
-            if (predDiff === realDiff) {
-                bd.push({ rule: 'Correct goal difference', pts: POINTS.CORRECT_GOAL_DIFF })
-            }
+        // ── Rule 3: Goal difference ──────────────────────────────────────────────
+        const predDiff = Math.abs(predHome - predAway)
+        const realDiff = Math.abs(realHome - realAway)
+        if (predDiff === realDiff) {
+            bd.push({ rule: 'Correct goal difference', pts: POINTS.CORRECT_GOAL_DIFF })
         }
-        // For draws: rule 3 does NOT apply (stated explicitly in spec)
     }
 
     // ── Rule 4: Individual team goals (independent of outcome, not on exact) ─
     if (predHome === realHome) {
-        bd.push({ rule: 'Correct home team goals', pts: POINTS.CORRECT_TEAM_GOALS })
+        const pts = Math.max(1, realHome)
+        bd.push({ rule: 'Correct home team goals', pts })
     }
     if (predAway === realAway) {
-        bd.push({ rule: 'Correct away team goals', pts: POINTS.CORRECT_TEAM_GOALS })
+        const pts = Math.max(1, realAway)
+        bd.push({ rule: 'Correct away team goals', pts })
     }
 
     return bd
@@ -238,8 +237,8 @@ export const SCORING_REFERENCE = {
     groupAndKnockout: [
         { pts: 25, label: 'Exact score', note: 'Perfect scoreline — terminal, no other rules stack' },
         { pts: 10, label: 'Correct outcome', note: 'Right winner or draw, any scoreline' },
-        { pts: 5, label: 'Goal difference', note: 'Right margin — only on non-draw correct outcomes' },
-        { pts: 1, label: 'Team goals (per team)', note: 'One team\'s tally matches — not awarded on exact score' },
+        { pts: 5, label: 'Goal difference', note: 'Right margin — applies to all correct outcomes including draws' },
+        { pts: 'N', label: 'Team goals (per team)', note: 'N = number of goals correctly predicted (min 1 for 0-0). Not awarded on exact score' },
     ],
     knockoutSupplement: [
         { pts: 10, label: 'Correct qualifier', note: 'Team that advances after penalties — only on drawn 90-min results' },

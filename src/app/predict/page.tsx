@@ -5,6 +5,7 @@ import GroupPredictions from '@/components/GroupPredictions'
 import ThirdPlaceTable from '@/components/ThirdPlaceTable'
 import LockBanner from '@/components/LockBanner'
 import HowToPlay from '@/components/HowToPlay'
+import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
 import BracketSection from '@/components/BracketSection'
 import { PredictionProvider } from '@/components/PredictionContext'
 import { GROUPS, GROUP_MATCHES, getGroupMatches, getFlagUrl } from '@/lib/wc2026-data'
@@ -119,6 +120,7 @@ export default async function PredictPage() {
                     >
                         <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
                             <LockBanner />
+                            <ScoringRulesDrawer />
                             <HowToPlay />
                         </div>
 
