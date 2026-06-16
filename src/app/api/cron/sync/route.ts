@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60 // seconds — requires Vercel Pro for >10s, on Hobby cron gets 60s
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Name aliases: football-data.org team names → our local team codes

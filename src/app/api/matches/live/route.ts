@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-// In-memory cache to avoid hammering the API on every page render
+export const maxDuration = 9 // Vercel Hobby limit is 10s — stay just under
+
 let cachedMatches: any[] = []
 let cacheTimestamp = 0
 const CACHE_TTL_MS = 30_000 // 30 seconds
@@ -32,7 +33,8 @@ export async function GET() {
     try {
         const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
             headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY ?? '' },
-            signal: AbortSignal.timeout(12000),
+            // Vercel hobby plan has a 10s hard timeout. We must fail fast.
+            signal: AbortSignal.timeout(4500),
         })
 
         if (res.ok) {
@@ -95,7 +97,7 @@ export async function GET() {
     // ── Fallback: worldcup26.ir ───────────────────────────────────────────────
     try {
         const res = await fetch('https://worldcup26.ir/get/games', {
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.timeout(3500),
         })
         if (res.ok) {
             const data = await res.json()
