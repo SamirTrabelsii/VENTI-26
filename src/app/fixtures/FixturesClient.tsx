@@ -60,12 +60,16 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
         return () => clearInterval(int)
     }, [])
 
-    // Combine static matches with DB statuses
+    // Combine static matches with API live statuses
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
             const dbMatch = dbMatches.find(d => d.id === m.id)
-            const liveMatch = liveMatches.find(l => l.id.toString() === m.api_id)
-            
+            // Match by home + away team code (works for both football-data.org and worldcup26.ir responses)
+            const liveMatch = liveMatches.find(l =>
+                (l._homeCode === m.home_team && l._awayCode === m.away_team) ||
+                (l.homeTeam?.tla === m.home_team && l.awayTeam?.tla === m.away_team)
+            )
+
             let status = dbMatch?.status ?? 'upcoming'
             let homeScore = dbMatch?.home_score ?? null
             let awayScore = dbMatch?.away_score ?? null
@@ -73,9 +77,9 @@ export default function FixturesClient({ predictions, dbMatches, apiMatches = []
             if (liveMatch && liveMatch.status !== 'SCHEDULED') {
                 if (liveMatch.status === 'IN_PLAY' || liveMatch.status === 'PAUSED') status = 'live'
                 else if (liveMatch.status === 'FINISHED') status = 'finished'
-                
-                homeScore = liveMatch.score.fullTime.home ?? homeScore
-                awayScore = liveMatch.score.fullTime.away ?? awayScore
+
+                homeScore = liveMatch.score?.fullTime?.home ?? homeScore
+                awayScore = liveMatch.score?.fullTime?.away ?? awayScore
             }
 
             return {
