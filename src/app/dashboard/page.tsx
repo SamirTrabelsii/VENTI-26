@@ -13,6 +13,7 @@ import FAQSection from '@/components/FAQSection'
 import LockBanner from '@/components/LockBanner'
 import MotionDiv from '@/components/MotionDiv'
 import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
+import DynamicDashboardStats from '@/components/DynamicDashboardStats'
 
 export default async function DashboardPage() {
     const supabase = await createClient()
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
     let myScore: Score | null = null
     let firstGroupId: string | null = null
     let firstGroupName: string | null = null
+    const dbMatchStatusMap = new Map<string, string>()
 
     if (user) {
         const [
@@ -35,11 +37,13 @@ export default async function DashboardPage() {
             { data: mgData },
             { data: pRows, count: pCount },
             { count: bCount },
+            { data: dbMatchesData },
         ] = await Promise.all([
             supabase.from('profiles').select('*').eq('id', user.id).single(),
             supabase.from('group_members').select('group_id, groups(id, name, description)').eq('user_id', user.id).limit(3),
             supabase.from('predictions').select('*', { count: 'exact' }).eq('user_id', user.id),
             supabase.from('bracket_picks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+            supabase.from('matches').select('id, status'),
         ])
         
         profile = pData
@@ -47,6 +51,9 @@ export default async function DashboardPage() {
         preds = pRows || []
         predCount = pCount || 0
         bracketCount = bCount || 0
+
+        const dbMatches = dbMatchesData || []
+        dbMatches.forEach((m: any) => dbMatchStatusMap.set(m.id, m.status))
 
         firstGroupId = myGroups?.[0]?.group_id ?? null
         firstGroupName = (myGroups?.[0]?.groups as unknown as { name: string })?.name ?? null
@@ -61,21 +68,43 @@ export default async function DashboardPage() {
             scores = data ?? []
             myScore = scores.find(s => s.user_id === user.id) ?? null
         }
+
+        // Fetch the user's global score (any group row works since total_points is the same)
+        if (!myScore) {
+            const { data: globalScore } = await supabase
+                .from('scores')
+                .select('*')
+                .eq('user_id', user.id)
+                .limit(1)
+                .single()
+            if (globalScore) myScore = globalScore
+        }
     }
 
     // ── Countdown ──────────────────────────────────────────────────────────────
     const kickoff = new Date(TOURNAMENT_LOCK)
     const now = new Date()
     const diffMs = Math.max(0, kickoff.getTime() - now.getTime())
+    const tournamentStarted = diffMs === 0
+    const daysSinceStart = tournamentStarted ? Math.floor((now.getTime() - kickoff.getTime()) / 86400000) : 0
     const days = Math.floor(diffMs / 86400000)
     const hours = Math.floor((diffMs % 86400000) / 3600000)
     const mins = Math.floor((diffMs % 3600000) / 60000)
 
     // ── Progress ───────────────────────────────────────────────────────────────
     const groupTotal = GROUP_MATCHES.length          // 72 group stage matches
+    const knockoutTotal = 32                         // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
+    const totalMatches = groupTotal + knockoutTotal  // 104
     const groupPreds = predCount ?? 0
     const bracketPreds = bracketCount ?? 0
+    const totalPreds = groupPreds + bracketPreds
     const groupPct = Math.min(100, Math.round((groupPreds / groupTotal) * 100))
+    const overallPct = Math.min(100, Math.round((totalPreds / totalMatches) * 100))
+
+    // ── Accuracy ───────────────────────────────────────────────────────────────
+    const myExact = myScore?.exact_scores ?? 0
+    const myCorrect = myScore?.correct_results ?? 0
+    const myStreak = myScore?.streak ?? 0
 
     // ── My rank in first group ─────────────────────────────────────────────────
     const myRank = myScore && user
@@ -169,35 +198,51 @@ export default async function DashboardPage() {
                         <div className="glass-panel w-full lg:w-auto min-w-[288px] relative overflow-hidden flex-shrink-0 rounded-[18px] p-6 md:p-7 z-10">
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold))' }} />
 
-                            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 14 }}>
-                                Kickoff in
-                            </p>
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20 }}>
-                                {[
-                                    { num: String(days).padStart(2, '0'), label: 'Days' },
-                                    { num: String(hours).padStart(2, '0'), label: 'Hours' },
-                                    { num: String(mins).padStart(2, '0'), label: 'Mins' },
-                                ].map((u, i) => (
-                                    <div key={u.label} style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-                                        {i > 0 && <span style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: 'var(--gold-dim)', paddingBottom: 8 }}>:</span>}
+                            {tournamentStarted ? (
+                                <>
+                                    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--green-bright)', marginBottom: 14 }}>
+                                        🟢 Tournament Live
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20 }}>
                                         <div style={{ textAlign: 'center' }}>
-                                            <span style={{ fontFamily: 'Bebas Neue', fontSize: 54, color: 'var(--cream)', display: 'block', lineHeight: 1 }}>{u.num}</span>
-                                            <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginTop: 4, display: 'block' }}>{u.label}</span>
+                                            <span style={{ fontFamily: 'Bebas Neue', fontSize: 54, color: 'var(--cream)', display: 'block', lineHeight: 1 }}>DAY {daysSinceStart + 1}</span>
+                                            <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginTop: 4, display: 'block' }}>of the World Cup</span>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
+                                </>
+                            ) : (
+                                <>
+                                    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 14 }}>
+                                        Kickoff in
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20 }}>
+                                        {[
+                                            { num: String(days).padStart(2, '0'), label: 'Days' },
+                                            { num: String(hours).padStart(2, '0'), label: 'Hours' },
+                                            { num: String(mins).padStart(2, '0'), label: 'Mins' },
+                                        ].map((u, i) => (
+                                            <div key={u.label} style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                                                {i > 0 && <span style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: 'var(--gold-dim)', paddingBottom: 8 }}>:</span>}
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <span style={{ fontFamily: 'Bebas Neue', fontSize: 54, color: 'var(--cream)', display: 'block', lineHeight: 1 }}>{u.num}</span>
+                                                    <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginTop: 4, display: 'block' }}>{u.label}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
 
-                            {/* Group stage progress */}
+                            {/* Overall predictions progress */}
                             <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
-                                    <span>Group stage predictions</span>
-                                    <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>{groupPct}%</span>
+                                    <span>Total predictions</span>
+                                    <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>{overallPct}%</span>
                                 </div>
                                 <div style={{ height: 6, borderRadius: 3, background: 'var(--surface3)', overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', borderRadius: 3, width: `${groupPct}%`, background: 'var(--gold)', transition: 'width 1s ease' }} />
+                                    <div style={{ height: '100%', borderRadius: 3, width: `${overallPct}%`, background: overallPct === 100 ? 'var(--green-bright)' : 'var(--gold)', transition: 'width 1s ease' }} />
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>{groupPreds} / {groupTotal} matches</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>{totalPreds} / {totalMatches} matches</div>
                             </div>
                         </div>
 
@@ -213,38 +258,17 @@ export default async function DashboardPage() {
                 className="max-w-[1400px] mx-auto px-5 pb-7 md:px-10 md:pb-7"
             >
                 <LockBanner />
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                    {[
-                        {
-                            label: 'Completion Status', accent: 'var(--gold)',
-                            value: groupPreds === groupTotal && bracketPreds > 0 ? '100%' : `${Math.round(((groupPreds + (bracketPreds > 0 ? 15 : 0)) / (groupTotal + 15)) * 100)}%`,
-                            sub: `${groupPreds}/${groupTotal} groups · ${bracketPreds > 0 ? 'Bracket done' : 'No bracket'}`,
-                        },
-                        {
-                            label: 'My Leagues', accent: 'var(--green-bright)',
-                            value: myGroups.length,
-                            sub: firstGroupName ? `Best Rank: #${myRank ?? '—'} in ${firstGroupName}` : 'You are not in any leagues',
-                        },
-                        {
-                            label: 'Total Points', accent: 'var(--blue-accent)',
-                            value: myScore?.total_points ?? 0,
-                            sub: 'Awaiting Kickoff',
-                        },
-                        {
-                            label: 'Accuracy', accent: '#a855f7',
-                            value: '— %',
-                            sub: 'Tournament starts June 11',
-                        },
-                    ].map(c => (
-                        <div key={c.label} className="relative overflow-hidden rounded-[14px] p-[14px] md:p-4 border border-[var(--border)] glass-panel transition-transform hover:-translate-y-1">
-                            <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${c.accent}, transparent 70%)` }} />
-                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: c.accent }} />
-                            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6, paddingLeft: 12 }}>{c.label}</p>
-                            <p style={{ fontFamily: 'Bebas Neue', fontSize: 40, color: 'var(--cream)', paddingLeft: 12, lineHeight: 1 }}>{c.value}</p>
-                            <p style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 12, marginTop: 4 }}>{c.sub}</p>
-                        </div>
-                    ))}
-                </div>
+                <DynamicDashboardStats
+                    myScore={myScore}
+                    predictions={preds}
+                    groupPreds={groupPreds}
+                    bracketPreds={bracketPreds}
+                    totalMatches={totalMatches}
+                    myGroupsLength={myGroups.length}
+                    firstGroupName={firstGroupName}
+                    myRank={myRank}
+                    dbMatchStatuses={Object.fromEntries(dbMatchStatusMap)}
+                />
             </MotionDiv>
 
             {/* ── MAIN GRID ── */}
