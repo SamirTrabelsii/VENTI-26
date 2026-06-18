@@ -1,11 +1,11 @@
 'use client'
 
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { getRobohashUrl } from '@/lib/wc2026-data'
-import { Home, CalendarDays, Edit3, Users, Trophy, Globe } from 'lucide-react'
+import { Home, CalendarDays, Edit3, Users, Trophy, Globe, LogOut, User } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const TABS = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -21,6 +21,7 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
     const router = useRouter()
     const [supabase] = useState(() => createClient())
     const [menuOpen, setMenuOpen] = useState(false)
+    const dropdownRef = useRef<HTMLDivElement>(null)
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
@@ -30,37 +31,43 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
 
     const avatarSeed = displayName || initials || 'player'
 
+    // Close dropdown on outside click
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setMenuOpen(false)
+            }
+        }
+        if (menuOpen) document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [menuOpen])
+
     return (
         <>
-            {/* Top Navigation */}
-            <nav
-                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 md:px-8 h-16"
-                style={{
-                    background: 'rgba(10,10,10,0.92)',
-                    backdropFilter: 'blur(12px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
-                }}
-            >
+            {/* Top Navigation - Black & Gold Theme */}
+            <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 md:px-8 h-[72px] bg-[#050505]/95 backdrop-blur-md transition-all duration-300">
+                {/* Subtle Gold Bottom Gradient Line */}
+                <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--gold)]/50 to-transparent" />
+
                 {/* Logo */}
                 <div
-                    className="cursor-pointer flex items-center"
+                    className="cursor-pointer flex items-center group relative"
                     onClick={() => router.push('/dashboard')}
                 >
-                    <img
-                        src="/images/logo.png"
-                        alt="FIFA World Cup 2026"
-                        style={{ objectFit: 'contain', height: 38, width: 'auto' }}
-                    />
-                    <span className="font-display text-xl tracking-widest text-white ml-3 hidden sm:block">
-                        VENTI<span className="text-white/40">·</span>26
+                    <div className="relative w-[42px] h-[42px] transition-transform duration-500 group-hover:scale-110">
+                        <img
+                            src="/images/logo.png"
+                            alt="FIFA World Cup 2026"
+                            className="object-contain w-full h-full drop-shadow-[0_0_12px_rgba(212,168,67,0.4)]"
+                        />
+                    </div>
+                    <span className="font-display text-[22px] tracking-[0.25em] text-white ml-3 hidden sm:block transition-all duration-500 group-hover:text-[var(--gold)] group-hover:drop-shadow-[0_0_8px_rgba(212,168,67,0.5)]">
+                        VENTI<span className="text-white/30 group-hover:text-[var(--gold)]/50">·</span>26
                     </span>
                 </div>
 
-                {/* Desktop Tabs */}
-                <div
-                    className="hidden md:flex gap-1 p-1 rounded-xl"
-                    style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}
-                >
+                {/* Desktop Tabs - Underline Indicator Style */}
+                <div className="hidden md:flex items-center h-full gap-2">
                     {TABS.map(tab => {
                         const active = pathname.startsWith(tab.href)
 
@@ -68,13 +75,20 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                             <button
                                 key={tab.href}
                                 onClick={() => router.push(tab.href)}
-                                className="px-4 py-1.5 rounded-lg text-sm font-medium"
-                                style={{
-                                    background: active ? 'var(--surface3)' : 'transparent',
-                                    color: active ? 'var(--cream)' : 'var(--dim)',
-                                }}
+                                className={`relative h-full px-4 flex items-center gap-2 text-[13px] uppercase tracking-widest font-bold transition-colors duration-300 ${
+                                    active ? 'text-[var(--gold)]' : 'text-zinc-500 hover:text-zinc-200'
+                                }`}
                             >
+                                <tab.icon size={16} className={active ? "text-[var(--gold)] drop-shadow-[0_0_5px_rgba(212,168,67,0.5)]" : "opacity-60"} strokeWidth={active ? 2.5 : 2} />
                                 {tab.label}
+                                
+                                {active && (
+                                    <motion.div
+                                        layoutId="desktop-nav-line"
+                                        className="absolute bottom-0 left-0 right-0 h-[3px] bg-[var(--gold)] shadow-[0_-2px_10px_rgba(212,168,67,0.6)]"
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                )}
                             </button>
                         )
                     })}
@@ -84,113 +98,118 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                 {isGuest ? (
                     <button
                         onClick={() => router.push('/auth/login')}
-                        style={{
-                            padding: '8px 20px',
-                            borderRadius: 10,
-                            background: 'var(--gold)',
-                            color: '#0a0a0a',
-                            fontSize: 13,
-                            fontWeight: 700,
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontFamily: 'DM Sans, sans-serif',
-                        }}
+                        className="px-6 py-2 border border-[var(--gold)] bg-black/50 text-[var(--gold)] text-xs uppercase tracking-widest font-bold hover:bg-[var(--gold)] hover:text-black transition-all duration-300"
                     >
                         Sign In
                     </button>
                 ) : (
-                <div style={{ position: 'relative' }}>
-                    <img
-                        src={getRobohashUrl(avatarSeed, 80)}
-                        alt="avatar"
-                        width={34}
-                        height={34}
-                        style={{
-                            borderRadius: '50%',
-                            cursor: 'pointer',
-                            border: '2px solid var(--border-gold)',
-                        }}
-                        onClick={() => setMenuOpen(v => !v)}
-                    />
-
-                    {/* Dropdown */}
-                    {menuOpen && (
-                        <div
-                            style={{
-                                position: 'absolute',
-                                right: 0,
-                                top: 45,
-                                width: 160,
-                                borderRadius: 12,
-                                background: 'var(--surface2)',
-                                border: '1px solid var(--border)',
-                                overflow: 'hidden',
-                            }}
+                    <div className="relative flex items-center h-full" ref={dropdownRef}>
+                        <button 
+                            className="relative w-[42px] h-[42px] rounded-full overflow-hidden border-[2px] border-[#222] transition-all duration-300 hover:border-[var(--gold)] hover:shadow-[0_0_15px_rgba(212,168,67,0.3)] focus:outline-none"
+                            onClick={() => setMenuOpen(v => !v)}
                         >
-                            <button
-                                onClick={() => {
-                                    setMenuOpen(false)
-                                    router.push('/profile')
-                                }}
-                                style={{
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    textAlign: 'left',
-                                    fontSize: 13,
-                                    color: 'var(--cream)',
-                                    borderBottom: '1px solid var(--border)',
-                                }}
-                            >
-                                My Profile
-                            </button>
-                            <button
-                                onClick={handleSignOut}
-                                style={{
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    textAlign: 'left',
-                                    fontSize: 13,
-                                    color: 'var(--dim)',
-                                }}
-                            >
-                                Sign out
-                            </button>
-                        </div>
-                    )}
-                </div>
+                            <img
+                                src={getRobohashUrl(avatarSeed, 80)}
+                                alt="User avatar"
+                                className="object-cover w-full h-full bg-[#111]"
+                            />
+                        </button>
+
+                        {/* Dropdown - Edgy Sports Look */}
+                        <AnimatePresence>
+                            {menuOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 15, scale: 0.95 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="absolute right-0 top-[65px] w-56 bg-[#0a0a0a] border border-[#222] shadow-[0_15px_40px_rgba(0,0,0,0.8)] overflow-hidden"
+                                    style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%)' }}
+                                >
+                                    <div className="px-5 py-4 border-b border-[#222] bg-[#111]">
+                                        <p className="text-[10px] text-zinc-500 font-bold mb-1 uppercase tracking-[0.2em]">Signed in as</p>
+                                        <p className="text-sm text-white font-display tracking-wide truncate">{displayName || 'Player'}</p>
+                                    </div>
+                                    <div className="p-2">
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false)
+                                                router.push('/profile')
+                                            }}
+                                            className="w-full px-4 py-3 flex items-center gap-3 text-xs uppercase tracking-wider font-bold text-zinc-300 hover:bg-[#1a1a1a] hover:text-[var(--gold)] transition-colors"
+                                        >
+                                            <User size={16} />
+                                            My Profile
+                                        </button>
+                                        <button
+                                            onClick={handleSignOut}
+                                            className="w-full px-4 py-3 flex items-center gap-3 text-xs uppercase tracking-wider font-bold text-zinc-500 hover:bg-red-950/30 hover:text-red-500 transition-colors"
+                                        >
+                                            <LogOut size={16} />
+                                            Sign out
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 )}
             </nav>
 
-            {/* Mobile Bottom Navigation */}
-            <nav
-                className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between h-16 overflow-x-auto"
-                style={{
-                    background: 'rgba(10,10,10,0.95)',
-                    backdropFilter: 'blur(12px)',
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
-                    paddingBottom: 'env(safe-area-inset-bottom)', // Support for iOS home indicator
-                }}
-            >
-                {TABS.map(tab => {
-                    const active = pathname.startsWith(tab.href)
-                    const Icon = tab.icon
+            {/* Mobile Bottom Navigation - Stadium Glow Effect */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#050505]/95 backdrop-blur-xl border-t border-[#222] pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+                {/* Active Tab Glow Overlay */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div className="w-full h-full flex">
+                        {TABS.map((tab, idx) => (
+                            <div key={`glow-${idx}`} className="flex-1 flex justify-center">
+                                {pathname.startsWith(tab.href) && (
+                                    <motion.div
+                                        layoutId="mobile-nav-glow"
+                                        className="w-16 h-16 bg-[var(--gold)] opacity-[0.15] blur-xl rounded-full translate-y-4"
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
-                    return (
-                        <button
-                            key={tab.href}
-                            onClick={() => router.push(tab.href)}
-                            className="flex flex-col items-center justify-center w-full h-full gap-1"
-                            style={{
-                                minWidth: 64,
-                                color: active ? 'var(--gold)' : 'var(--dim)',
-                                WebkitTapHighlightColor: 'transparent'
-                            }}
-                        >
-                            <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                            <span style={{ fontSize: 10, fontWeight: active ? 600 : 500 }}>{tab.label}</span>
-                        </button>
-                    )
-                })}
+                <div className="flex items-center justify-around h-[70px] relative z-10 px-1">
+                    {TABS.map(tab => {
+                        const active = pathname.startsWith(tab.href)
+                        const Icon = tab.icon
+
+                        return (
+                            <button
+                                key={tab.href}
+                                onClick={() => router.push(tab.href)}
+                                className="relative flex flex-col items-center justify-center w-full h-full gap-1.5 focus:outline-none group"
+                                style={{ WebkitTapHighlightColor: 'transparent' }}
+                            >
+                                {/* Animated Top Bar */}
+                                {active && (
+                                    <motion.div
+                                        layoutId="mobile-nav-line"
+                                        className="absolute top-0 left-1/4 right-1/4 h-[3px] bg-[var(--gold)] rounded-b-sm shadow-[0_2px_8px_rgba(212,168,67,0.6)]"
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                )}
+                                
+                                <div className={`relative transition-transform duration-300 ${active ? '-translate-y-1' : 'group-hover:-translate-y-0.5'}`}>
+                                    <Icon 
+                                        size={active ? 24 : 22} 
+                                        className={`transition-colors duration-300 ${active ? 'text-[var(--gold)] drop-shadow-[0_0_8px_rgba(212,168,67,0.6)]' : 'text-zinc-600'}`}
+                                        strokeWidth={active ? 2.5 : 2} 
+                                    />
+                                </div>
+                                <span className={`text-[9px] uppercase tracking-[0.1em] transition-all duration-300 ${active ? 'font-black text-[var(--gold)]' : 'font-bold text-zinc-600'}`}>
+                                    {tab.label}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
             </nav>
         </>
     )
