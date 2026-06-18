@@ -68,8 +68,8 @@ const getStatusStyle = (status: string) => {
 
 const formatKickoff = (utc: string) => {
     const d = getAdjustedKickoff(utc)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Europe/Paris' }) + ' · ' +
-        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris' }) + ' CET/CEST'
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Africa/Tunis' }) + ' · ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Tunis' }) + ' GMT+1'
 }
 
 const formatGroup = (g?: string) =>
@@ -242,8 +242,8 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                         ) : (
                             <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--muted)' }}>
                                 {getAdjustedKickoff(m.utcDate).toLocaleTimeString('en-US', {
-                                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris'
-                                })} <span style={{ fontSize: 10, opacity: 0.7 }}>CET/CEST</span>
+                                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Tunis'
+                                })} <span style={{ fontSize: 10, opacity: 0.7 }}>GMT+1</span>
                             </span>
                         )}
                     </div>
@@ -311,7 +311,7 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                 </div>
                 {lastUpdated && (
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                        Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}
+                        Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Tunis' })}
                     </span>
                 )}
             </div>

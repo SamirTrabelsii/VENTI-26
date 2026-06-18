@@ -56,8 +56,8 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
     }
 
     const kickoff = new Date(match.kickoff)
-    const dateStr = kickoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Europe/Paris' })
-    const timeStr = kickoff.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris' })
+    const dateStr = kickoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Africa/Tunis' })
+    const timeStr = kickoff.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Tunis' })
     return (
         <div
             style={{
@@ -78,7 +78,7 @@ export default function MatchCard({ match, prediction, userId, onSaved, localHom
                 fontSize: 11, color: 'var(--muted)',
             }}>
                 <span style={{ fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    Group {match.group_label} · Match {match.match_number} · {dateStr} {timeStr} CET/CEST
+                    Group {match.group_label} · Match {match.match_number} · {dateStr} {timeStr} GMT+1
                     {prediction && !prediction.is_repredicted && (
                         <span style={{ background: 'rgba(212,168,67,0.15)', color: 'var(--gold)', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>
                             🔒 ORIGINAL

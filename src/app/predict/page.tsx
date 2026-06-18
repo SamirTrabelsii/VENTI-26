@@ -10,6 +10,7 @@ import BracketSection from '@/components/BracketSection'
 import { PredictionProvider } from '@/components/PredictionContext'
 import { GROUPS, GROUP_MATCHES, getGroupMatches, getFlagUrl } from '@/lib/wc2026-data'
 import TeamFlag from '@/components/TeamFlag'
+import { GET as getLiveMatches } from '@/app/api/matches/live/route'
 
 export default async function PredictPage() {
     const supabase = await createClient()
@@ -45,6 +46,18 @@ export default async function PredictPage() {
             flagUrl: getFlagUrl(matches[0]?.home_team ?? ''),
         }
     })
+
+    // Fetch live matches to override static kickoff times if needed
+    let liveMatches: any[] = []
+    try {
+        const liveRes = await getLiveMatches()
+        if (liveRes.ok) {
+            const liveData = await liveRes.json()
+            liveMatches = liveData.matches || []
+        }
+    } catch (e) {
+        // silently fallback to static dates
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
@@ -130,7 +143,17 @@ export default async function PredictPage() {
                         <div id="group-stage" style={{ marginBottom: 40, maxWidth: 800, margin: '0 auto' }}>
                             <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 44, color: 'var(--gold)', marginBottom: 20 }}>Group Stage Predictions</h1>
                             {GROUPS.map((g) => {
-                                const activeMatches = getGroupMatches(g)
+                                const baseMatches = getGroupMatches(g)
+                                const activeMatches = baseMatches.map(m => {
+                                    const lm = liveMatches.find(l => 
+                                        (l._homeCode === m.home_team && l._awayCode === m.away_team) ||
+                                        (l.homeTeam?.tla === m.home_team && l.awayTeam?.tla === m.away_team)
+                                    )
+                                    return { 
+                                        ...m,
+                                        kickoff: lm?.utcDate || m.kickoff
+                                    }
+                                })
                                 return (
                                     <div id={`group-${g}`} key={g} style={{ marginBottom: 60, paddingBottom: 40, borderBottom: '1px solid var(--border)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
