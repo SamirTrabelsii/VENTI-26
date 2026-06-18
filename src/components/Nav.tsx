@@ -5,14 +5,15 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { getRobohashUrl } from '@/lib/wc2026-data'
-import { Home, CalendarDays, Edit3, Users, Trophy } from 'lucide-react'
+import { Home, CalendarDays, Edit3, Users, Trophy, Globe } from 'lucide-react'
 
 const TABS = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/fixtures', label: 'Fixtures', icon: CalendarDays },
     { href: '/predict', label: 'Predict', icon: Edit3 },
     { href: '/groups', label: 'Groups', icon: Users },
-    { href: '/leaderboard', label: 'Rankings', icon: Trophy }
+    { href: '/leaderboard', label: 'Rankings', icon: Trophy },
+    { href: '/pulse', label: 'Pulse', icon: Globe }
 ]
 
 export default function Nav({ initials = 'PL', displayName, isGuest }: { initials?: string; displayName?: string; isGuest?: boolean }) {
@@ -146,7 +147,7 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
 
             {/* Mobile Bottom Navigation */}
             <nav
-                className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around h-16"
+                className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between h-16 overflow-x-auto"
                 style={{
                     background: 'rgba(10,10,10,0.95)',
                     backdropFilter: 'blur(12px)',
@@ -164,6 +165,7 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                             onClick={() => router.push(tab.href)}
                             className="flex flex-col items-center justify-center w-full h-full gap-1"
                             style={{
+                                minWidth: 64,
                                 color: active ? 'var(--gold)' : 'var(--dim)',
                                 WebkitTapHighlightColor: 'transparent'
                             }}
