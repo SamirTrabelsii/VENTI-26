@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 import { scoreMatch } from '@/lib/scoring'
+import { useRouter } from 'next/navigation'
 
 const TOTAL_MATCHES = 104
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
@@ -36,6 +37,7 @@ interface LeaderboardClientProps {
 }
 
 export default function LeaderboardClient({ initialLeaderboard, predictions, currentUserId, dbMatchStatuses = {} }: LeaderboardClientProps) {
+    const router = useRouter()
     const [liveMatches, setLiveMatches] = useState<any[]>([])
 
     // Poll live matches every 60s
@@ -79,12 +81,33 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
         return initialLeaderboard.map(user => {
             let activeLiveBonus = 0
             let pendingFinishedBonus = 0
+            let dynamicStreak = user.streak
+            let dynamicExact = user.exact_scores
+            let dynamicCorrect = user.correct_results
+
+            const unsyncedFinished = activeMatchesWithDbId.filter(lm => lm.status === 'FINISHED' && dbMatchStatuses[lm.dbId] !== 'finished')
+            unsyncedFinished.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+
+            for (const lm of unsyncedFinished) {
+                const pred = predictions.find(p => p.user_id === user.id && p.match_id === lm.dbId)
+                if (pred && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
+                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
+                    if (res.type === 'exact') dynamicExact++
+                    if (['correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
+                    if (['exact', 'correct', 'goal_diff'].includes(res.type)) {
+                        dynamicStreak++
+                    } else {
+                        dynamicStreak = 0
+                    }
+                } else {
+                    // Missed prediction — break streak
+                    dynamicStreak = 0
+                }
+            }
 
             for (const lm of activeMatchesWithDbId) {
-                // Find prediction for this user and match
                 const pred = predictions.find(p => p.user_id === user.id && p.match_id === lm.dbId)
                 const isSyncedToDb = dbMatchStatuses[lm.dbId] === 'finished'
-                // If points are already synced in DB, the backend sync has happened! So don't add live points!
                 if (pred && !isSyncedToDb && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
                     const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
                     
@@ -99,7 +122,10 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
             return {
                 ...user,
                 display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
-                live_bonus: activeLiveBonus
+                live_bonus: activeLiveBonus,
+                dynamic_streak: dynamicStreak,
+                dynamic_exact: dynamicExact,
+                dynamic_correct: dynamicCorrect
             }
         }).sort((a, b) =>
             b.display_points - a.display_points
@@ -157,11 +183,20 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
                     }
 
                     return (
-                        <div key={row.id} style={{
+                        <div key={row.id} 
+                             onClick={() => router.push(`/profile?id=${row.id}`)}
+                             style={{
                             display: 'flex', alignItems: 'center', padding: '14px 20px',
                             borderBottom: '1px solid var(--border)',
                             background: isMe ? 'rgba(212,168,67,0.06)' : 'transparent',
                             transition: 'background 0.15s',
+                            cursor: 'pointer'
+                        }}
+                        onMouseEnter={e => {
+                            if (!isMe) e.currentTarget.style.background = 'var(--surface2)'
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = isMe ? 'rgba(212,168,67,0.06)' : 'transparent'
                         }}>
                             {/* Rank */}
                             <div style={{
@@ -189,9 +224,9 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
                                         {row.display_name}
                                         {isMe && <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--gold)', color: '#000', borderRadius: 4, fontWeight: 700 }}>YOU</span>}
                                     </div>
-                                    {row.streak > 0 && (
+                                    {row.dynamic_streak > 0 && (
                                         <div style={{ fontSize: 11, color: '#e05c4a', marginTop: 2 }}>
-                                            🔥 {row.streak} streak
+                                            🔥 {row.dynamic_streak} streak
                                         </div>
                                     )}
                                 </div>
@@ -217,12 +252,12 @@ export default function LeaderboardClient({ initialLeaderboard, predictions, cur
 
                             {/* Exact */}
                             <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                {row.exact_scores}
+                                {row.dynamic_exact}
                             </div>
 
                             {/* Correct */}
                             <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                {row.correct_results}
+                                {row.dynamic_correct}
                             </div>
 
                             {/* Total Points */}

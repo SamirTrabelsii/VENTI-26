@@ -259,7 +259,7 @@ export default async function DashboardPage() {
                 >
                     <QuickActions actions={[
                         { href: '/groups', icon: '👥', label: 'Groups & Leagues', sub: 'Compete against your friends' },
-                        { href: '/insights', icon: '🏆', label: 'The Palmares Room', sub: 'Unlock badges & trophies' }
+                        { href: '/profile', icon: '🏆', label: 'My Profile', sub: 'Stats, badges & match history' }
                     ]} />
 
                     {/* Live matches */}
@@ -327,7 +327,7 @@ export default async function DashboardPage() {
                         <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
                             Badges, trophies, DNA profile and full scoring breakdown.
                         </p>
-                        <Link href="/insights" style={{ display: 'inline-block', padding: '10px 22px', borderRadius: 10, background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                        <Link href="/profile" style={{ display: 'inline-block', padding: '10px 22px', borderRadius: 10, background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
                             Enter →
                         </Link>
                     </div>

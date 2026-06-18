@@ -182,7 +182,7 @@ const FAQ_ITEMS: FAQItem[] = [
         question: 'Where can I see my full statistics and badges?',
         answer: (
             <>
-                Visit the <Link href="/insights" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>Palmares Room</Link> (Insights page).
+                Visit the <Link href="/profile" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>Palmares Room</Link> (Profile page).
                 It shows your total points, exact score count, result accuracy, best streak, your <em>Prediction DNA</em> profile, badge collection, and the full scoring formula.
             </>
         ),
@@ -358,7 +358,7 @@ export default function FAQSection() {
                 <span style={{ fontSize: 16 }}>💡</span>
                 <span>
                     For the full scoring breakdown and badge details, visit the{' '}
-                    <Link href="/insights" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>
+                    <Link href="/profile" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>
                         Palmares Room →
                     </Link>
                 </span>

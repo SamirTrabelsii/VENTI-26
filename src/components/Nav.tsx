@@ -128,6 +128,22 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                             }}
                         >
                             <button
+                                onClick={() => {
+                                    setMenuOpen(false)
+                                    router.push('/profile')
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    textAlign: 'left',
+                                    fontSize: 13,
+                                    color: 'var(--cream)',
+                                    borderBottom: '1px solid var(--border)',
+                                }}
+                            >
+                                My Profile
+                            </button>
+                            <button
                                 onClick={handleSignOut}
                                 style={{
                                     width: '100%',

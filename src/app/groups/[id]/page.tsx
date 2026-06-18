@@ -19,6 +19,9 @@ interface MemberScore {
     joined_at: string
     display_points?: number
     live_bonus?: number
+    dynamic_streak?: number
+    dynamic_exact?: number
+    dynamic_correct?: number
 }
 
 interface GroupData {
@@ -206,6 +209,29 @@ export default function GroupDetailPage() {
         return scores.map(user => {
             let activeLiveBonus = 0
             let pendingFinishedBonus = 0
+            let dynamicStreak = user.streak
+            let dynamicExact = user.exact_scores
+            let dynamicCorrect = user.correct_results
+
+            const unsyncedFinished = activeMatchesWithDbId.filter(lm => lm.status === 'FINISHED' && dbMatchStatuses[lm.dbId] !== 'finished')
+            unsyncedFinished.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+
+            for (const lm of unsyncedFinished) {
+                const pred = predictions.find(p => p.user_id === user.user_id && p.match_id === lm.dbId)
+                if (pred && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
+                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
+                    if (res.type === 'exact') dynamicExact++
+                    if (['correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
+                    if (['exact', 'correct', 'goal_diff'].includes(res.type)) {
+                        dynamicStreak++
+                    } else {
+                        dynamicStreak = 0
+                    }
+                } else {
+                    // Missed prediction — break streak
+                    dynamicStreak = 0
+                }
+            }
 
             for (const lm of activeMatchesWithDbId) {
                 const pred = predictions.find(p => p.user_id === user.user_id && p.match_id === lm.dbId)
@@ -224,7 +250,10 @@ export default function GroupDetailPage() {
             return {
                 ...user,
                 display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
-                live_bonus: activeLiveBonus
+                live_bonus: activeLiveBonus,
+                dynamic_streak: dynamicStreak,
+                dynamic_exact: dynamicExact,
+                dynamic_correct: dynamicCorrect
             }
         }).sort((a, b) => (b.display_points || 0) - (a.display_points || 0))
     }, [scores, liveMatches, predictions, dbMatchStatuses])
@@ -451,9 +480,9 @@ export default function GroupDetailPage() {
                                             {isMe && <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400, marginLeft: 6 }}>· you</span>}
                                         </div>
                                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, display: 'flex', gap: 10 }}>
-                                            <span>{s.exact_scores} exact</span>
-                                            <span>{s.correct_results} correct</span>
-                                            {s.streak > 0 && <span style={{ color: '#e05c4a' }}>🔥 {s.streak} streak</span>}
+                                            <span>{s.dynamic_exact ?? s.exact_scores} exact</span>
+                                            <span>{s.dynamic_correct ?? s.correct_results} correct</span>
+                                            {(s.dynamic_streak || 0) > 0 && <span style={{ color: '#e05c4a' }}>🔥 {s.dynamic_streak} streak</span>}
                                         </div>
                                     </div>
 
