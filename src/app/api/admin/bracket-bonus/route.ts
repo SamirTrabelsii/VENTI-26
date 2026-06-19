@@ -1,15 +1,15 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { BRACKET_ROUNDS } from '@/lib/wc2026-data'
 
 export async function POST(request: Request) {
-    const supabase = await createClient()
-
     // Auth guard (check for admin or scoring secret)
     const secret = request.headers.get('x-scoring-secret')
     if (secret !== process.env.SCORING_SECRET) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabase = createAdminClient()
 
     try {
         // 1. Fetch all finished knockout matches

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { scoreMatch } from '@/lib/scoring'
 import { fetchAllRows } from '@/lib/supabase/pagination'
@@ -18,13 +19,13 @@ import { fetchAllRows } from '@/lib/supabase/pagination'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-    const supabase = await createClient()
-
     // Auth guard
     const secret = request.headers.get('x-scoring-secret')
     if (secret !== process.env.SCORING_SECRET) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabase = createAdminClient()
 
     const body = await request.json()
     const { match_id } = body
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
         const bp = await fetchAllRows(
             supabase
                 .from('bracket_picks')
-                .select('user_id, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
+                .select('user_id, slot_index, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
                 .eq('round', round)
         )
             
