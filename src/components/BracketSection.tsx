@@ -192,7 +192,7 @@ function RoundColumn({
 export default function BracketSection() {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const savedScrollPos = useRef(0); // use ref so no re-render is triggered
-    const { groupScores, bracketPicks, setBracketPick } = usePredictions()
+    const { groupScores, bracketPicks, setBracketPick, isLocked } = usePredictions()
     const phase = getTournamentPhase()
     const [viewMode, setViewMode] = useState<'live' | 'original'>('original')
     const realState = useRealTournament()
@@ -290,11 +290,12 @@ export default function BracketSection() {
 
     const canEditSlot = useCallback((round: Round, slotIndex: number, slot?: Slot) => {
         if (viewMode === 'original') {
-            return phase === 'PRE_TOURNAMENT'
+            // Allow editing if: pre-tournament OR user has been personally unlocked
+            return phase === 'PRE_TOURNAMENT' || !isLocked
         }
 
         return phase === 'KNOCKOUT_OPEN' && hasKnownFixture(slot) && !hasKickoffPassed(round, slotIndex)
-    }, [phase, viewMode])
+    }, [phase, viewMode, isLocked])
 
     const handleChange = (round: Round, slotIndex: number, homeScore: number | '', awayScore: number | '', advancingTeam: string | null) => {
         // Capture scroll position synchronously before state update

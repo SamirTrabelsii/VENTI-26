@@ -36,6 +36,7 @@ interface PredictionContextType {
     saveAll: () => Promise<void>
     saving: boolean
     hasUnsavedChanges: boolean
+    isLocked: boolean
 }
 
 const PredictionContext = createContext<PredictionContextType | null>(null)
@@ -50,11 +51,13 @@ export function PredictionProvider({
     userId, 
     initialPredictions, 
     initialBracketPicks,
+    isUnlocked,
     children 
 }: { 
     userId?: string | null
     initialPredictions: Prediction[]
     initialBracketPicks: BracketPick[]
+    isUnlocked?: boolean
     children: ReactNode 
 }) {
     const [supabase] = React.useState(() => createClient())
@@ -155,8 +158,11 @@ export function PredictionProvider({
         }
     }, [userId, groupScores, bracketPicks, hasUnsavedChanges])
 
+    // Compute personalized lock: globally locked UNLESS admin has unlocked this specific user
+    const isLocked = isGlobalLockPassed() && !isUnlocked
+
     const setGroupScore = useCallback((matchId: string, home: number | '', away: number | '') => {
-        if (isGlobalLockPassed()) return
+        if (isLocked) return
 
         setHasUnsavedChanges(true)
 
@@ -281,7 +287,8 @@ export function PredictionProvider({
         <PredictionContext.Provider value={{
             groupScores, setGroupScore,
             bracketPicks, setBracketPick,
-            saveAll, saving, hasUnsavedChanges
+            saveAll, saving, hasUnsavedChanges,
+            isLocked
         }}>
             {children}
 

@@ -20,7 +20,7 @@ interface Stats {
 
 interface AdminUser {
     id: string; email: string; display_name: string; avatar_initials: string; avatar_color: string; created_at: string
-    predictions: number; bracket_picks: number; groups: number
+    predictions: number; bracket_picks: number; groups: number; is_unlocked?: boolean
     score: { total_points: number; exact_scores: number; correct_results: number; streak: number } | null
 }
 
@@ -543,6 +543,25 @@ function UsersTab() {
         }
     }
 
+    const toggleUnlock = async (userId: string, name: string, currentStatus: boolean) => {
+        const newStatus = !currentStatus
+        if (!confirm(`${newStatus ? 'Unlock' : 'Lock'} predictions for "${name}"?`)) return
+        
+        const res = await fetch('/api/admin/users/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, is_unlocked: newStatus }),
+        })
+        
+        if (res.ok) {
+            setActionMsg(`✅ ${newStatus ? 'Unlocked' : 'Locked'} ${name}`)
+            await loadUsers()
+        } else {
+            const data = await res.json()
+            setActionMsg(`❌ Failed to toggle unlock: ${data.error}`)
+        }
+    }
+
     if (loading) return <Loading />
 
     return (
@@ -579,6 +598,7 @@ function UsersTab() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <img src={getRobohashUrl(u.display_name, 40)} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />
                                         <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{u.display_name}</span>
+                                        {u.is_unlocked && <span style={{ fontSize: 10, background: 'rgba(212,168,67,0.15)', color: 'var(--gold)', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>UNLOCKED</span>}
                                     </div>
                                 </td>
                                 <td style={{ ...td, fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -601,6 +621,9 @@ function UsersTab() {
                                 </td>
                                 <td style={td}>
                                     <div style={{ display: 'flex', gap: 4 }}>
+                                        <button onClick={() => toggleUnlock(u.id, u.display_name, u.is_unlocked ?? false)} style={{ ...btnSmall, background: u.is_unlocked ? 'rgba(212,168,67,0.15)' : 'var(--surface2)', borderColor: u.is_unlocked ? 'var(--gold)' : 'var(--border)', color: u.is_unlocked ? 'var(--gold)' : 'var(--dim)' }} title={u.is_unlocked ? 'Lock predictions' : 'Unlock predictions'}>
+                                            {u.is_unlocked ? '🔒' : '🔓'}
+                                        </button>
                                         <button onClick={() => resetPassword(u.id, u.display_name)} style={btnSmall} title="Reset password">
                                             🔑
                                         </button>

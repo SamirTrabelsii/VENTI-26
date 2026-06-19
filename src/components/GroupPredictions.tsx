@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import MatchCard from '@/components/MatchCard'
 import type { MatchData } from '@/lib/wc2026-data'
-import { getTeam, isGlobalLockPassed } from '@/lib/wc2026-data'
+import { getTeam } from '@/lib/wc2026-data'
 import type { Prediction } from '@/types'
 import { usePredictions } from '@/components/PredictionContext'
 import TeamFlag from '@/components/TeamFlag'
@@ -16,8 +16,7 @@ interface Props {
 }
 
 const GroupPredictions = memo(function GroupPredictions({ activeMatches, userId, nextGroup }: Props) {
-    const { groupScores, setGroupScore } = usePredictions()
-    const isLocked = isGlobalLockPassed()
+    const { groupScores, setGroupScore, isLocked } = usePredictions()
 
 
     const handleScoreChange = (matchId: string, home: number | '', away: number | '') => {

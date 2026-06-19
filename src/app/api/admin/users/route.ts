@@ -20,7 +20,7 @@ export async function GET() {
     // All profiles
     const { data: profiles } = await db
         .from('profiles')
-        .select('id, email, display_name, avatar_initials, avatar_color, created_at')
+        .select('id, email, display_name, avatar_initials, avatar_color, created_at, is_unlocked')
         .order('created_at', { ascending: false })
 
     if (!profiles) return NextResponse.json({ users: [] })

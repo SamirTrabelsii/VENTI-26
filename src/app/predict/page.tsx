@@ -130,6 +130,7 @@ export default async function PredictPage() {
                         userId={user?.id || null}
                         initialPredictions={predictions ?? []}
                         initialBracketPicks={bracketPicks ?? []}
+                        isUnlocked={profile?.is_unlocked ?? false}
                     >
                         <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
                             <LockBanner />
