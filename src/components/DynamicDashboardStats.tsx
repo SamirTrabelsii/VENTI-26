@@ -63,7 +63,7 @@ export default function DynamicDashboardStats({
             if (pred && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
                 const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
                 if (res.type === 'exact') dynamicExact++
-                if (['correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
+                if (['exact', 'correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
                 if (['exact', 'correct', 'goal_diff'].includes(res.type)) {
                     dynamicStreak++
                 } else {

@@ -106,7 +106,7 @@ export default function ScoringRulesDrawer({ customTrigger }: { customTrigger?: 
                                 </div>
                             </div>
 
-                            {/* Section 1.5 Goal/No-Goal Bonus */}
+                            {/* Section 1.5 Goal-Goal/No Goal Bonus */}
                             <div className="p-6 border-b border-[var(--border)] relative overflow-hidden">
                                 <h3 className="text-[10px] font-bold tracking-[2px] uppercase text-[#D4A843] mb-5 flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#D4A843]" /> Additional Bonuses
@@ -114,12 +114,12 @@ export default function ScoringRulesDrawer({ customTrigger }: { customTrigger?: 
                                 
                                 <div className="flex items-start gap-4">
                                     <div className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-[#D4A843]/10 border border-[#D4A843]/20">
-                                        <span className="font-display text-2xl text-[#D4A843]">+1</span>
+                                        <span className="font-display text-2xl text-[#D4A843]">+3</span>
                                     </div>
                                     <div className="pt-1">
-                                        <div className="text-sm font-semibold text-cream">Goal / No-Goal Bonus</div>
+                                        <div className="text-sm font-semibold text-cream">Goal-Goal/No Goal Bonus</div>
                                         <div className="text-[11px] text-muted mt-1 leading-relaxed">
-                                            Earn an extra point if you correctly predict whether <strong>both teams score</strong> (e.g. 1-1, 2-1) or <strong>at least one team keeps a clean sheet</strong> (e.g. 1-0, 0-0).
+                                            Earn three extra points if you correctly predict <strong>both teams score</strong>, or the <strong>same specific team</strong> is held scoreless. Perfect predictions do not add this bonus.
                                         </div>
                                     </div>
                                 </div>

@@ -41,7 +41,6 @@ function ProfileContent() {
     const [predCount, setPredCount] = useState(0)
     const [totalPoints, setTotalPoints] = useState(0)
     const [exactCount, setExactCount] = useState(0)
-    const [correctCount, setCorrectCount] = useState(0)
     const [currentStreak, setCurrentStreak] = useState(0)
     const [bestStreak, setBestStreak] = useState(0)
     const [selectedBadge, setSelectedBadge] = useState<any>(null)
@@ -228,15 +227,11 @@ function ProfileContent() {
             // Derive KPIs dynamically from match history (single source of truth)
             let dynTotal = bracketBonus
             let dynExact = 0
-            let dynCorrect = 0
             let dynCurrentStreak = 0
             let dynBestStreak = 0
             for (const m of hist) {
                 dynTotal += m.points
                 if (m.type === 'exact') dynExact++
-                if (['correct', 'goal_diff'].includes(m.type)) {
-                    dynCorrect++
-                }
                 
                 // Only evaluate streaks for fully finished matches
                 if (m.status === 'FINISHED' || m.status === 'finished') {
@@ -250,7 +245,6 @@ function ProfileContent() {
             }
             setTotalPoints(dynTotal)
             setExactCount(dynExact)
-            setCorrectCount(dynCorrect)
             setCurrentStreak(dynCurrentStreak)
             setBestStreak(dynBestStreak)
 
@@ -288,8 +282,18 @@ function ProfileContent() {
         }
     })
     const unlockedCount = badges.filter(b => b.unlocked).length
+    const finishedPredictedMatches = historyMatches.filter(m =>
+        (m.status === 'FINISHED' || m.status === 'finished') &&
+        m.pred_home_score !== null &&
+        m.pred_home_score !== undefined
+    )
+    const finishedCorrectOutcomeMatches = finishedPredictedMatches.filter(m =>
+        ['exact', 'correct', 'goal_diff'].includes(m.type)
+    )
     const accuracy = predCount > 0 ? Math.round((exactCount / predCount) * 100) : 0
-    const resultAccuracy = predCount > 0 ? Math.round((correctCount / predCount) * 100) : 0
+    const resultAccuracy = finishedPredictedMatches.length > 0
+        ? Math.round((finishedCorrectOutcomeMatches.length / finishedPredictedMatches.length) * 100)
+        : 0
     const dnaProfile = exactCount >= 5 ? DNA_PROFILES[0] : predCount >= 30 && resultAccuracy < 40 ? DNA_PROFILES[2] : predCount >= 20 ? DNA_PROFILES[1] : DNA_PROFILES[3]
     const displayName = profile?.display_name ?? 'Player'
     const filteredBadges = activeFilter === 'all' ? badges : badges.filter(b => b.tier === activeFilter)

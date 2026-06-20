@@ -105,12 +105,12 @@ const FAQ_ITEMS: FAQItem[] = [
                 </thead>
                 <tbody>
                     {[
-                        { rule: 'Exact scoreline (e.g. 2-1 → 2-1)', pts: '+25', color: 'var(--gold)' },
-                        { rule: 'Correct outcome (total points by error: 1 / 2 / 3 / 4 / 5+)', pts: '15 / 10 / 5 / 2 / 0', color: 'var(--cream)' },
-                        { rule: 'Goal / No-Goal Bonus (BTTS correct, applies to non-exact scores)', pts: '+1', color: '#5b9fff' },
-                        { rule: 'Wrong outcome mercy (total points by error: 1 / 2 / 3+)', pts: '5 / 2 / 0', color: 'var(--dim)' },
-                        { rule: 'Exact scoreline maximum', pts: '+25', color: 'var(--gold)' },
-                        { rule: 'Correct qualifier after penalties (knockout draw)', pts: '+10', color: '#e05c4a' },
+                        { rule: 'Perfect exact scoreline', pts: '+25', color: 'var(--gold)' },
+                        { rule: 'Correct match result', pts: '+10', color: 'var(--cream)' },
+                        { rule: 'Goal accuracy with correct result (off by 1 / 2 / 3 / 4 / 5)', pts: '+5 / +4 / +3 / +2 / +1', color: '#5b9fff' },
+                        { rule: 'Draw vs win/loss mismatch, off by exactly 1', pts: '+5', color: 'var(--dim)' },
+                        { rule: 'BTTS or same-team clean sheet bonus', pts: '+3', color: '#10b981' },
+                        { rule: 'Correct advancing team in knockout matches', pts: '+5', color: '#e05c4a' },
                     ].map(row => (
                         <tr key={row.rule} style={{ borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '8px 8px', color: 'var(--dim)', lineHeight: 1.4 }}>{row.rule}</td>
@@ -142,7 +142,7 @@ const FAQ_ITEMS: FAQItem[] = [
                     ))}
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
-                    If you predicted the wrong teams in that match slot, you score <strong style={{ color: '#e05c4a' }}>0 points</strong> — the fixture validation rule.
+                    If you predicted the wrong teams in that match slot, you score <strong style={{ color: '#e05c4a' }}>0 points</strong> for that original knockout match prediction.
                     If you re-predicted (live update), you score normally <strong>without</strong> the multiplier.
                 </p>
             </>

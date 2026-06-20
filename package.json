@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:scoring": "tsc --module commonjs --moduleResolution node --target ES2020 --types node --outDir .tmp/scoring-tests --noEmit false src/lib/scoring.ts src/lib/scoring.test.ts && node .tmp/scoring-tests/scoring.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

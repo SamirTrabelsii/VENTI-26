@@ -165,7 +165,7 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
                     }
                     
                     if (result.type === 'exact') exactBonus += 1
-                    if (result.type === 'correct' || result.type === 'goal_diff') correctBonus += 1
+                    if (['exact', 'correct', 'goal_diff'].includes(result.type)) correctBonus += 1
                 }
             }
 
@@ -229,7 +229,9 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
                                 </div>
                                 <div style={{
                                     width: '100%', height: height, background: isMe ? 'rgba(212,168,67,0.1)' : 'var(--surface2)',
-                                    border: `1px solid ${color}`, borderBottom: 'none',
+                                    borderTop: `1px solid ${color}`,
+                                    borderRight: `1px solid ${color}`,
+                                    borderLeft: `1px solid ${color}`,
                                     borderTopLeftRadius: 16, borderTopRightRadius: 16,
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 35,
                                     boxShadow: rank === 1 ? '0 -10px 40px rgba(212,168,67,0.15)' : 'none'

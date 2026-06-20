@@ -903,7 +903,7 @@ function ScoringTab() {
                     <div>
                         <h3 style={{ fontFamily: 'Bebas Neue', fontSize: 30, color: 'var(--blue-accent)', lineHeight: 1 }}>Scoring System Comparison</h3>
                         <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-                            Compare current proximity points against the previous scoring formula for every user.
+                            Compare stored totals against the active scoring formula for every user.
                         </p>
                     </div>
                     <button onClick={loadScoringComparison} disabled={loadingComparison} style={{ ...btnGold, opacity: loadingComparison ? 0.6 : 1 }}>
@@ -1182,7 +1182,7 @@ function ToolsTab() {
                         <span style={{ fontSize: 24 }}>#</span>
                         <div>
                             <h3 style={{ fontFamily: 'Bebas Neue', fontSize: 24, color: 'var(--blue-accent)', lineHeight: 1 }}>Scoring System Comparison</h3>
-                            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Admin-only view comparing current proximity scoring with the previous formula.</p>
+                            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Admin-only view comparing stored totals with the active formula.</p>
                         </div>
                     </div>
                     <button onClick={loadScoringComparison} disabled={loadingComparison} style={{ ...btnGold, opacity: loadingComparison ? 0.6 : 1 }}>

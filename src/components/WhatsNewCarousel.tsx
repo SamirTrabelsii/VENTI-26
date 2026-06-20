@@ -28,13 +28,18 @@ type Slide = {
 }
 
 const STORAGE_PREFIX = 'venti26:whats-new'
+const SCORING_HIGHLIGHTS = [
+    { points: '+25', title: 'Exact score', detail: 'Hard cap' },
+    { points: '+10', title: 'Correct result', detail: 'Win/draw/loss' },
+    { points: '+3', title: 'Goal-Goal/No Goal', detail: 'Both teams scores/Clean-Sheet' },
+]
 const SCORING_LADDER = [
-    { error: '0', points: '+15', label: 'Exact Score' },
-    { error: '1', points: '+5', label: '1 Goal Off' },
-    { error: '2', points: '+0', label: '2 Goals Off' },
-    { error: '3', points: '-5', label: '3 Goals Off' },
-    { error: '4', points: '-8', label: '4 Goals Off' },
-    { error: '5+', points: '-10', label: '5+ Goals Off' }
+    { error: '1', points: '+5' },
+    { error: '2', points: '+4' },
+    { error: '3', points: '+3' },
+    { error: '4', points: '+2' },
+    { error: '5', points: '+1' },
+    { error: '6+', points: '+0' }
 ]
 
 export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
@@ -47,7 +52,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const slides = useMemo<Slide[]>(() => [
         {
             title: 'New Scoring System',
-            body: 'A precise scoring model based on Goal Difference Error. Earn up to 15 points for perfect predictions.',
+            body: 'A precise scoring model with exact scores, match result points, goal accuracy, and clean-sheet bonuses.',
             note: '',
             Icon: Target,
             accent: '#D4A843',
@@ -244,8 +249,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -18 }}
                                     transition={{ duration: 0.2 }}
-                                    className="max-h-[60vh] overflow-y-auto pr-1 md:max-h-[65vh]"
-                                    style={{ scrollbarWidth: 'thin' }}
+                                    className="pr-1"
                                 >
                                     <div className="mb-4 flex items-center gap-3">
                                         <div className="grid h-12 w-12 place-items-center border bg-black/45" style={{ borderColor: `${slide.accent}88` }}>
@@ -264,44 +268,65 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     )}
 
                                     {slide.variant === 'scoring' ? (
-                                        <div className="mt-4 space-y-3">
-                                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                                                {SCORING_LADDER.map(item => (
-                                                    <div key={item.error} className="border border-white/10 bg-black/35 p-2 text-center">
-                                                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">Error {item.error}</p>
-                                                        <p className="mt-1 font-display text-xl text-[#D4A843]">{item.points}</p>
-                                                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">{item.label}</p>
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-[13px] leading-snug text-zinc-300">
+                                                Exact score is king. Otherwise, score the result, then add tight accuracy and bonus calls.
+                                            </p>
+
+                                            <div className="grid grid-cols-3 gap-1.5">
+                                                {SCORING_HIGHLIGHTS.map(rule => (
+                                                    <div key={rule.title} className="border border-white/10 bg-white/[0.04] p-2">
+                                                        <p className="font-display text-2xl leading-none text-[#D4A843]">{rule.points}</p>
+                                                        <p className="mt-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-white">{rule.title}</p>
+                                                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-zinc-500">{rule.detail}</p>
                                                     </div>
                                                 ))}
                                             </div>
 
-                                            <div className="border border-white/10 bg-white/[0.04] p-3">
-                                                <div className="mb-2 flex items-center justify-center gap-2">
-                                                    <Target size={14} className="text-[#D4A843]" />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Example</span>
+                                            <div className="border border-[#D4A843]/25 bg-[#D4A843]/[0.06] p-2">
+                                                <div className="mb-1.5 flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D4A843]">Goal accuracy</p>
+                                                    </div>
+                                                    <div className="font-display text-lg text-white">+5 to +0</div>
                                                 </div>
-                                                
-                                                <div className="flex items-center justify-between text-center gap-2">
-                                                    <div className="flex-1 bg-black/50 border border-white/10 p-2 rounded">
-                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-widest">Prediction</span>
-                                                        <span className="block text-xl font-display text-white mt-1">3 - 1</span>
-                                                    </div>
-                                                    <div className="text-zinc-600 font-black text-[10px] uppercase">VS</div>
-                                                    <div className="flex-1 bg-black/50 border border-[#D4A843]/30 p-2 rounded">
-                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-widest">Actual</span>
-                                                        <span className="block text-xl font-display text-white mt-1">2 - 1</span>
-                                                    </div>
+                                                <div className="grid grid-cols-6 gap-1">
+                                                    {SCORING_LADDER.map(item => (
+                                                        <div key={item.error} className="border border-white/10 bg-black/35 px-0.5 py-1.5 text-center">
+                                                            <p className="text-[8px] font-black uppercase tracking-[0.12em] text-zinc-500">Off {item.error}</p>
+                                                            <p className="mt-0.5 font-display text-lg text-[#D4A843]">{item.points}</p>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                
-                                                <div className="mt-3 bg-black/30 p-2 border border-white/5 rounded flex justify-between items-center">
-                                                    <div className="flex flex-col text-left">
-                                                        <span className="text-[10px] text-zinc-400 font-bold">1 Goal Error</span>
-                                                        <span className="text-sm font-display text-[#D4A843]">+5 pts</span>
-                                                    </div>
-                                                    <div className="flex flex-col text-right">
-                                                        <span className="text-[10px] text-zinc-400 font-bold">Outcome</span>
-                                                        <span className="text-sm font-display text-[#D4A843]">+10 pts</span>
-                                                    </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="border border-white/10 bg-black/35 p-2">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Wrong winner</p>
+                                                    <p className="font-display text-xl text-white">0 base</p>
+                                                </div>
+                                                <div className="border border-white/10 bg-black/35 p-2">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Knockout advance</p>
+                                                    <p className="font-display text-xl text-white">+5</p>
+                                                </div>
+                                                <div className="border border-white/10 bg-black/35 p-2">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Supplements</p>
+                                                    <p className="font-display text-xl text-white">x / bonus</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between border border-white/5 bg-white/[0.02] p-2 mt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#D4A843]">e.g.</span>
+                                                    <span className="text-[10px] text-zinc-300">Predict <b>3-1</b>, Actual <b>2-1</b></span>
+                                                </div>
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-zinc-500 uppercase">
+                                                    <span>Result (+10)</span>
+                                                    <span>+</span>
+                                                    <span>Off by 1 (+5)</span>
+                                                    <span>+</span>
+                                                    <span>GG (+3)</span>
+                                                    <span className="text-[#D4A843] ml-1 text-[11px]">= 18</span>
                                                 </div>
                                             </div>
                                         </div>

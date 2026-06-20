@@ -1,12 +1,12 @@
 // VENTI 26 scoring engine
 //
-// Current match scoring:
-// - +10 for correct outcome (winner or draw)
-// - +15 score proximity, penalized by total score error:
-//   error 0 => +15, 1 => +10, 2 => +6, 3 => +3, 4 => +1, 5+ => +0
-// - Knockout drawn matches can add +10 for the correct qualifier.
-//
-// Legacy scoring has been completely removed in favor of the active backend engine.
+// Base match scoring:
+// - Exact scoreline: 25 points, with no other scoreline bonuses.
+// - Non-exact correct result: 10 points + a goal-accuracy bonus.
+// - Draw/win mismatch: only an error-1 prediction can earn 5 goal-accuracy points.
+// - Full winner reversal: no result or goal-accuracy points.
+// - BTTS / same-team clean sheet: +3 on any non-exact prediction.
+// - Knockout matches can add +5 for the correct team that advances.
 
 export interface BreakdownItem {
     rule: string
@@ -31,9 +31,9 @@ export interface ScoringOptions {
 
 export const POINTS = {
     EXACT_SCORE: 25,
-    CORRECT_OUTCOME: 10,
-    PROXIMITY_MAX: 15,
-    KNOCKOUT_QUALIFIER: 10,
+    CORRECT_RESULT: 10,
+    KNOCKOUT_QUALIFIER: 5,
+    BTTS_OR_CLEAN_SHEET: 3,
     EARLY_LOCK: 2,
 } as const
 
@@ -45,8 +45,8 @@ function outcome(home: number, away: number): 1 | 0 | -1 {
 
 function classifyType(breakdown: BreakdownItem[]): ScoringResult['type'] {
     const rules = breakdown.map(b => b.rule)
-    if (rules.some(r => r.includes('Exact scoreline') || r.includes('error 0'))) return 'exact'
-    if (rules.includes('Correct outcome')) return 'correct'
+    if (rules.includes('Perfect prediction')) return 'exact'
+    if (rules.includes('Correct match result')) return 'correct'
     if (breakdown.some(b => b.pts > 0)) return 'partial'
     return 'miss'
 }
@@ -69,45 +69,65 @@ function coreScore(
 ): BreakdownItem[] {
     const breakdown: BreakdownItem[] = []
 
-    const isCorrectOutcome = outcome(predHome, predAway) === outcome(realHome, realAway)
+    const predictedOutcome = outcome(predHome, predAway)
+    const actualOutcome = outcome(realHome, realAway)
+    const isCorrectOutcome = predictedOutcome === actualOutcome
+    const isExact = predHome === realHome && predAway === realAway
     const totalError = Math.abs(predHome - realHome) + Math.abs(predAway - realAway)
 
+    if (isExact) {
+        return [{ rule: 'Perfect prediction', pts: POINTS.EXACT_SCORE }]
+    }
+
     if (isCorrectOutcome) {
-        breakdown.push({ rule: 'Correct outcome', pts: POINTS.CORRECT_OUTCOME }) // +10
-        
-        let bonus = 0;
-        if (totalError === 0) bonus = 15;
-        else if (totalError === 1) bonus = 5;
-        else if (totalError === 2) bonus = 0; // 10 + 0 = 10 pts total
-        else if (totalError === 3) bonus = -5; // 10 - 5 = 5 pts total
-        else if (totalError === 4) bonus = -8; // 10 - 8 = 2 pts total
-        else bonus = -10; // 10 - 10 = 0 pts total
-        
+        breakdown.push({ rule: 'Correct match result', pts: POINTS.CORRECT_RESULT })
+
+        const bonus = goalAccuracyBonus(totalError)
         if (bonus > 0) {
-            breakdown.push({ rule: `Score proximity bonus (error ${totalError})`, pts: bonus })
-        } else if (bonus < 0) {
-            breakdown.push({ rule: `Score proximity penalty (error ${totalError >= 5 ? '5+' : totalError})`, pts: bonus })
+            breakdown.push({ rule: `Goal accuracy bonus (off by ${totalError})`, pts: bonus })
         }
     } else {
-        // Wrong Outcome (Mercy Rule)
-        let mercyPts = 0;
-        if (totalError === 1) mercyPts = 5;
-        else if (totalError === 2) mercyPts = 2;
-        else mercyPts = 0;
-        
-        if (mercyPts > 0) {
-            breakdown.push({ rule: `Close miss mercy (error ${totalError})`, pts: mercyPts })
+        const isDrawWinMismatch = predictedOutcome === 0 || actualOutcome === 0
+        if (isDrawWinMismatch && totalError === 1) {
+            breakdown.push({ rule: 'Draw/win close-score bonus', pts: 5 })
         }
     }
 
-    // Goal / No Goal (BTTS) Consolation Bonus
-    const realBTTS = realHome > 0 && realAway > 0;
-    const predBTTS = predHome > 0 && predAway > 0;
-    if (totalError > 0 && realBTTS === predBTTS) {
-        breakdown.push({ rule: 'Goal/No-Goal Bonus', pts: 1 })
+    if (hasBttsOrSameCleanSheetBonus(predHome, predAway, realHome, realAway)) {
+        breakdown.push({ rule: 'Goal-Goal/No Goal bonus', pts: POINTS.BTTS_OR_CLEAN_SHEET })
     }
 
     return breakdown
+}
+
+function goalAccuracyBonus(totalError: number): number {
+    if (totalError === 1) return 5
+    if (totalError === 2) return 4
+    if (totalError === 3) return 3
+    if (totalError === 4) return 2
+    if (totalError === 5) return 1
+    return 0
+}
+
+function hasBttsOrSameCleanSheetBonus(
+    predHome: number,
+    predAway: number,
+    realHome: number,
+    realAway: number,
+): boolean {
+    const predictedBothTeamsScored = predHome > 0 && predAway > 0
+    const actualBothTeamsScored = realHome > 0 && realAway > 0
+    if (predictedBothTeamsScored && actualBothTeamsScored) return true
+
+    const predictedHomeShutOut = predHome === 0
+    const predictedAwayShutOut = predAway === 0
+    const actualHomeShutOut = realHome === 0
+    const actualAwayShutOut = realAway === 0
+
+    return (
+        (predictedHomeShutOut && actualHomeShutOut) ||
+        (predictedAwayShutOut && actualAwayShutOut)
+    )
 }
 
 function applyKnockoutExtras(
@@ -124,9 +144,9 @@ function applyKnockoutExtras(
         isFixtureCorrect = true,
     } = options
 
-    if (outcome(realHome, realAway) === 0 && predQualifier && realQualifier && predQualifier === realQualifier) {
+    if (predQualifier && realQualifier && predQualifier === realQualifier) {
         breakdown.push({
-            rule: 'Correct qualifier (knockout)',
+            rule: 'Correct advancing team (knockout)',
             pts: POINTS.KNOCKOUT_QUALIFIER,
         })
     }
@@ -197,14 +217,14 @@ export function formatPoints(pts: number): string {
 
 export const SCORING_REFERENCE = {
     groupAndKnockout: [
-        { pts: 10, label: 'Correct outcome', note: 'Right winner or draw. Miss the outcome and this bonus is lost.' },
-        { pts: 15, label: 'Score proximity', note: 'Starts at +15 and penalizes Total Goal Error (sum of home & away goal difference). Correct outcome drops: Error 0=+15, 1=+5, 2=0, 3=-5, 4=-8, 5+=-10. Wrong outcome mercy: Error 1=+5, 2=+2, 3+=0.' },
-        { pts: 1, label: 'Goal / No-Goal Bonus', note: '+1 point for correctly predicting if both teams score (Goal/Goal) or not (No Goal). Does not apply to Exact Scores.' },
-        { pts: 25, label: 'Maximum score', note: 'Exact scoreline gives +10 outcome and +15 proximity.' },
+        { pts: 25, label: 'Perfect prediction', note: 'Exact scoreline. This caps the scoreline rules, so no result, goal-accuracy, or BTTS/clean-sheet bonus is added.' },
+        { pts: 10, label: 'Correct match result', note: 'Right home win, draw, or away win when the score is not exact.' },
+        { pts: '5/4/3/2/1' as const, label: 'Goal accuracy bonus', note: 'Only with a correct result: off by 1 to 5 total goals. Off by more than 5 earns no accuracy bonus.' },
+        { pts: 5, label: 'Draw/win close miss', note: 'If one side predicted a draw and the other had a winner, only an off-by-1 score earns this bonus.' },
     ],
     knockoutSupplement: [
-        { pts: 10, label: 'Correct qualifier', note: 'Team that advances after penalties. Applies only when the 90-minute result is a draw.' },
-        { pts: 35, label: 'Maximum knockout match', note: 'Exact score (25) + correct qualifier (10).' },
+        { pts: 5, label: 'Correct advancing team', note: 'Team that advances to the next round, regardless of the scoreline result.' },
+        { pts: 30, label: 'Live knockout maximum', note: 'Exact score (25) + correct advancing team (5), before original-prediction multipliers.' },
     ],
     originalMultipliers: [
         { round: 'R32', label: 'Round of 32', multiplier: 1.5, note: 'Your original locked prediction x 1.5' },
