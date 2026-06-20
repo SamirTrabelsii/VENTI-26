@@ -78,13 +78,13 @@ const formatGroup = (g?: string) =>
 // ── Main component ─────────────────────────────────────────────────────────────
 interface LiveMatchesProps {
     predictions?: Array<{ match_id: string; home_score: number; away_score: number }>
-    dashboardMode?: boolean
+    homeMode?: boolean
 }
 
-export default function LiveMatches({ predictions = [], dashboardMode = true }: LiveMatchesProps) {
+export default function LiveMatches({ predictions = [], homeMode = true }: LiveMatchesProps) {
     const [matches, setMatches] = useState<MatchData[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState<'all' | 'live' | 'today' | 'finished'>(dashboardMode ? 'today' : 'all')
+    const [filter, setFilter] = useState<'all' | 'live' | 'today' | 'finished'>(homeMode ? 'today' : 'all')
     const [selectedMatch, setSelectedMatch] = useState<MatchData | null>(null)
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -116,7 +116,7 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
         const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED'
         const isToday = m.utcDate.startsWith(todayStr)
         
-        if (dashboardMode) {
+        if (homeMode) {
             return isLive || isToday
         }
 
@@ -316,8 +316,8 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                 )}
             </div>
 
-            {/* Filter tabs (hidden in dashboard mode) */}
-            {!dashboardMode && (
+            {/* Filter tabs (hidden in home mode) */}
+            {!homeMode && (
                 <div style={{
                     display: 'flex', gap: 4, marginBottom: 16,
                     background: 'var(--surface2)',
@@ -350,7 +350,7 @@ export default function LiveMatches({ predictions = [], dashboardMode = true }: 
                 </div>
             )}
 
-            {dashboardMode && (
+            {homeMode && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <span style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 500 }}>Live & Today's Matches</span>
                     <a href="/fixtures" style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>View Full Fixtures →</a>

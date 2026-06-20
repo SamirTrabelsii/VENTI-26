@@ -15,7 +15,7 @@ const block = (w: string | number, h: number, radius = 6) => ({
     flexShrink: 0,
 } as React.CSSProperties)
 
-export function DashboardSkeleton() {
+export function HomeSkeleton() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)', paddingTop: 64 }}>
             <style>{`

@@ -75,109 +75,135 @@ export default function LiveLeaderboard({ groupId, currentUserId, initialScores 
         )
     }
 
+    const myRankIndex = scores.findIndex(s => s.user_id === currentUserId)
+    const myRank = myRankIndex + 1
+    const top5 = scores.slice(0, 5)
+    
+    // Check if the current user needs to be pinned at the bottom
+    const showMeAtBottom = myRankIndex >= 5
+
+    const renderRow = (s: Score, idx: number, actualRank: number) => {
+        const isMe = s.user_id === currentUserId
+        const rankColor = actualRank <= 3 ? RANK_COLORS[actualRank - 1] : 'var(--muted)'
+        const profile = s.profile
+        const displayName = profile?.display_name ?? profile?.email ?? 'Player'
+        const prevPts = prevScores[s.user_id]
+        const gained = justUpdated === s.user_id && prevPts !== undefined
+            ? s.total_points - prevPts
+            : null
+
+        return (
+            <div
+                key={s.user_id}
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 20px',
+                    borderBottom: '1px solid var(--border)',
+                    background: isMe ? 'rgba(212,168,67,0.04)' : 'transparent',
+                    transition: 'background 0.3s',
+                    position: 'relative',
+                }}
+            >
+                {/* Flash overlay when score updates */}
+                {justUpdated === s.user_id && (
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'rgba(212,168,67,0.08)',
+                        animation: 'flashFade 3s ease forwards',
+                        pointerEvents: 'none',
+                    }} />
+                )}
+                <style>{`@keyframes flashFade { 0%{opacity:1} 100%{opacity:0} }`}</style>
+
+                {/* Rank */}
+                <span style={{
+                    fontFamily: 'Bebas Neue', fontSize: 22,
+                    width: 28, textAlign: 'center', flexShrink: 0,
+                    color: rankColor,
+                }}>
+                    {actualRank}
+                </span>
+
+                {/* Robohash avatar */}
+                <img
+                    src={getRobohashUrl(displayName, 60)}
+                    alt={displayName}
+                    width={36}
+                    height={36}
+                    style={{
+                        borderRadius: '50%', flexShrink: 0,
+                        border: isMe ? '2px solid var(--gold)' : '2px solid var(--border)',
+                    }}
+                />
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        fontWeight: 500, fontSize: 14,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {displayName}
+                        {isMe && (
+                            <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--gold)' }}>
+                                👈 You
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                        {s.exact_scores} exact · {s.correct_results} correct
+                        {s.streak > 0 && (
+                            <span style={{ marginLeft: 6, color: '#e05c4a' }}>
+                                🔥 {s.streak} streak
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Points */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{
+                        fontFamily: 'Bebas Neue', fontSize: 28,
+                        color: isMe ? 'var(--gold)' : 'var(--cream)',
+                    }}>
+                        {s.total_points}
+                    </div>
+                    {gained !== null && gained > 0 && (
+                        <div style={{
+                            fontSize: 11, fontWeight: 700, color: 'var(--green-bright)',
+                            animation: 'slideUp 0.4s ease',
+                        }}>
+                            <style>{`@keyframes slideUp { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }`}</style>
+                            +{gained}
+                        </div>
+                    )}
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)' }}>
+                        pts
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div>
-            {scores.map((s, i) => {
-                const isMe = s.user_id === currentUserId
-                const rankColor = i < 3 ? RANK_COLORS[i] : 'var(--muted)'
-                const profile = s.profile
-                const displayName = profile?.display_name ?? profile?.email ?? 'Player'
-                const prevPts = prevScores[s.user_id]
-                const gained = justUpdated === s.user_id && prevPts !== undefined
-                    ? s.total_points - prevPts
-                    : null
-
-                return (
-                    <div
-                        key={s.user_id}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '14px 20px',
-                            borderBottom: '1px solid var(--border)',
-                            background: isMe ? 'rgba(212,168,67,0.04)' : 'transparent',
-                            transition: 'background 0.3s',
-                            position: 'relative',
-                        }}
-                    >
-                        {/* Flash overlay when score updates */}
-                        {justUpdated === s.user_id && (
-                            <div style={{
-                                position: 'absolute', inset: 0,
-                                background: 'rgba(212,168,67,0.08)',
-                                animation: 'flashFade 3s ease forwards',
-                                pointerEvents: 'none',
-                            }} />
-                        )}
-                        <style>{`@keyframes flashFade { 0%{opacity:1} 100%{opacity:0} }`}</style>
-
-                        {/* Rank */}
-                        <span style={{
-                            fontFamily: 'Bebas Neue', fontSize: 22,
-                            width: 28, textAlign: 'center', flexShrink: 0,
-                            color: rankColor,
-                        }}>
-                            {i + 1}
-                        </span>
-
-                        {/* Robohash avatar */}
-                        <img
-                            src={getRobohashUrl(displayName, 60)}
-                            alt={displayName}
-                            width={36}
-                            height={36}
-                            style={{
-                                borderRadius: '50%', flexShrink: 0,
-                                border: isMe ? '2px solid var(--gold)' : '2px solid var(--border)',
-                            }}
-                        />
-
-                        {/* Info */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                                fontWeight: 500, fontSize: 14,
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {displayName}
-                                {isMe && (
-                                    <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--gold)' }}>
-                                        👈 You
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                                {s.exact_scores} exact · {s.correct_results} correct
-                                {s.streak > 0 && (
-                                    <span style={{ marginLeft: 6, color: '#e05c4a' }}>
-                                        🔥 {s.streak} streak
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Points */}
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div style={{
-                                fontFamily: 'Bebas Neue', fontSize: 28,
-                                color: isMe ? 'var(--gold)' : 'var(--cream)',
-                            }}>
-                                {s.total_points}
-                            </div>
-                            {gained !== null && gained > 0 && (
-                                <div style={{
-                                    fontSize: 11, fontWeight: 700, color: 'var(--green-bright)',
-                                    animation: 'slideUp 0.4s ease',
-                                }}>
-                                    <style>{`@keyframes slideUp { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }`}</style>
-                                    +{gained}
-                                </div>
-                            )}
-                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)' }}>
-                                pts
-                            </div>
-                        </div>
+            {top5.map((s, i) => renderRow(s, i, i + 1))}
+            
+            {showMeAtBottom && (
+                <>
+                    <div style={{
+                        padding: '10px 0',
+                        textAlign: 'center',
+                        color: 'var(--muted)',
+                        fontSize: 12,
+                        letterSpacing: 2,
+                        background: 'var(--surface2)',
+                        borderBottom: '1px solid var(--border)'
+                    }}>
+                        • • •
                     </div>
-                )
-            })}
+                    {renderRow(scores[myRankIndex], myRankIndex, myRank)}
+                </>
+            )}
         </div>
     )
 }

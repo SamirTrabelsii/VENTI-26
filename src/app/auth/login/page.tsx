@@ -85,7 +85,7 @@ export default function LoginPage() {
             }
         }
 
-        router.push('/dashboard')
+        router.push('/home')
         router.refresh()
     }
 

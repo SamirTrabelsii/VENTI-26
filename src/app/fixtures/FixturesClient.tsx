@@ -333,6 +333,34 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
         )
     }
 
+    const scrollToLastPlayed = () => {
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Tunis' })
+        
+        let targetIso = null
+        for (const g of sortedDateGroups) {
+            if (g.isoDate === todayStr) {
+                targetIso = g.isoDate
+                break
+            }
+            if (g.isoDate < todayStr) {
+                targetIso = g.isoDate
+            }
+        }
+        
+        // If tournament hasn't started, target first day. If finished, target last day.
+        if (!targetIso && sortedDateGroups.length > 0) {
+            targetIso = sortedDateGroups[0].isoDate
+        }
+
+        if (targetIso) {
+            const el = document.getElementById(`date-${targetIso}`)
+            if (el) {
+                const y = el.getBoundingClientRect().top + window.scrollY - 100
+                window.scrollTo({ top: y, behavior: 'smooth' })
+            }
+        }
+    }
+
     return (
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 40px 60px' }}>
 
@@ -346,32 +374,52 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                 </p>
             </div>
 
-            {/* Filters */}
-            <div style={{
-                display: 'flex', gap: 4, marginBottom: 32,
-                background: 'var(--surface2)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: 6, width: 'fit-content',
-            }}>
-                {([
-                    { key: 'all', label: `All (${groupCount + koCount})` },
-                    { key: 'group', label: `Group Stage (${groupCount})` },
-                    { key: 'knockout', label: `Knockouts (${koCount})` },
-                ] as const).map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setFilter(tab.key)}
-                        style={{
-                            padding: '8px 20px', borderRadius: 8,
-                            fontSize: 13, fontWeight: 600,
-                            background: filter === tab.key ? 'var(--surface3)' : 'transparent',
-                            color: filter === tab.key ? 'var(--cream)' : 'var(--dim)',
-                            border: 'none', cursor: 'pointer',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+            {/* Controls Row */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
+                {/* Filters */}
+                <div style={{
+                    display: 'flex', gap: 4,
+                    background: 'var(--surface2)', border: '1px solid var(--border)',
+                    borderRadius: 12, padding: 6, width: 'fit-content',
+                }}>
+                    {([
+                        { key: 'all', label: `All (${groupCount + koCount})` },
+                        { key: 'group', label: `Group Stage (${groupCount})` },
+                        { key: 'knockout', label: `Knockouts (${koCount})` },
+                    ] as const).map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setFilter(tab.key)}
+                            style={{
+                                padding: '8px 20px', borderRadius: 8,
+                                fontSize: 13, fontWeight: 600,
+                                background: filter === tab.key ? 'var(--surface3)' : 'transparent',
+                                color: filter === tab.key ? 'var(--cream)' : 'var(--dim)',
+                                border: 'none', cursor: 'pointer',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Jump to Latest Button */}
+                <button
+                    onClick={scrollToLastPlayed}
+                    className="hover-glow"
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '10px 20px', borderRadius: 10,
+                        background: 'rgba(212,168,67,0.1)', border: '1px solid var(--gold)',
+                        color: 'var(--gold)', fontSize: 13, fontWeight: 700,
+                        cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: 1
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.color = '#000' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(212,168,67,0.1)'; e.currentTarget.style.color = 'var(--gold)' }}
+                >
+                    ↓ Last Played
+                </button>
             </div>
 
             {/* Live Matches Section */}
@@ -395,7 +443,7 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
             {/* Matches List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
                 {sortedDateGroups.map(({ date, isoDate, matches }) => (
-                    <div key={isoDate}>
+                    <div key={isoDate} id={`date-${isoDate}`}>
                         {/* Date Header */}
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16,

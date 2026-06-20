@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import WhatsNewCarousel from '@/components/WhatsNewCarousel'
 
 const TABS = [
-    { href: '/dashboard', label: 'Dashboard', icon: Home },
+    { href: '/home', label: 'Home', icon: Home },
     { href: '/fixtures', label: 'Fixtures', icon: CalendarDays },
     { href: '/predict', label: 'Predict', icon: Edit3 },
     { href: '/groups', label: 'Groups', icon: Users },
@@ -53,7 +53,7 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                 {/* Logo */}
                 <div
                     className="cursor-pointer flex items-center group relative"
-                    onClick={() => router.push('/dashboard')}
+                    onClick={() => router.push('/home')}
                 >
                     <div className="relative w-[42px] h-[42px] transition-transform duration-500 group-hover:scale-110">
                         <img
@@ -157,26 +157,9 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                 )}
             </nav>
 
-            {/* Mobile Bottom Navigation - Stadium Glow Effect */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#050505]/95 backdrop-blur-xl border-t border-[#222] pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
-                {/* Active Tab Glow Overlay */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <div className="w-full h-full flex">
-                        {TABS.map((tab, idx) => (
-                            <div key={`glow-${idx}`} className="flex-1 flex justify-center">
-                                {pathname.startsWith(tab.href) && (
-                                    <motion.div
-                                        layoutId="mobile-nav-glow"
-                                        className="w-16 h-16 bg-[var(--gold)] opacity-[0.15] blur-xl rounded-full translate-y-4"
-                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                    />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-around h-[70px] relative z-10 px-1">
+            {/* Mobile Bottom Navigation - Premium Minimalist */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#000000]/60 backdrop-blur-[40px] border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">
+                <div className="flex items-center h-[70px] px-2 relative">
                     {TABS.map(tab => {
                         const active = pathname.startsWith(tab.href)
                         const Icon = tab.icon
@@ -185,28 +168,28 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                             <button
                                 key={tab.href}
                                 onClick={() => router.push(tab.href)}
-                                className="relative flex flex-col items-center justify-center w-full h-full gap-1.5 focus:outline-none group"
+                                className="relative flex-1 flex flex-col items-center justify-center h-full focus:outline-none"
                                 style={{ WebkitTapHighlightColor: 'transparent' }}
                             >
-                                {/* Animated Top Bar */}
+                                {/* Minimalist Gold Thread Indicator */}
                                 {active && (
                                     <motion.div
-                                        layoutId="mobile-nav-line"
-                                        className="absolute top-0 left-1/4 right-1/4 h-[3px] bg-[var(--gold)] rounded-b-sm shadow-[0_2px_8px_rgba(212,168,67,0.6)]"
-                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                        layoutId="mobile-nav-thread"
+                                        className="absolute top-0 inset-x-4 h-[2px] bg-[var(--gold)] shadow-[0_2px_10px_rgba(212,168,67,0.5)]"
+                                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
                                     />
                                 )}
                                 
-                                <div className={`relative transition-transform duration-300 ${active ? '-translate-y-1' : 'group-hover:-translate-y-0.5'}`}>
+                                <div className={`flex flex-col items-center gap-1.5 transition-all duration-400 ${active ? 'scale-100' : 'scale-95 opacity-60 hover:opacity-80'}`}>
                                     <Icon 
-                                        size={active ? 24 : 22} 
-                                        className={`transition-colors duration-300 ${active ? 'text-[var(--gold)] drop-shadow-[0_0_8px_rgba(212,168,67,0.6)]' : 'text-zinc-600'}`}
+                                        size={20} 
+                                        className={`transition-colors duration-400 ${active ? 'text-white drop-shadow-[0_0_8px_rgba(212,168,67,0.4)]' : 'text-zinc-400'}`}
                                         strokeWidth={active ? 2.5 : 2} 
                                     />
+                                    <span className={`text-[9px] uppercase tracking-[0.1em] transition-colors duration-400 ${active ? 'font-bold text-[var(--gold)]' : 'font-medium text-zinc-500'}`}>
+                                        {tab.label}
+                                    </span>
                                 </div>
-                                <span className={`text-[9px] uppercase tracking-[0.1em] transition-all duration-300 ${active ? 'font-black text-[var(--gold)]' : 'font-bold text-zinc-600'}`}>
-                                    {tab.label}
-                                </span>
                             </button>
                         )
                     })}

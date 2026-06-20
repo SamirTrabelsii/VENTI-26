@@ -19,7 +19,7 @@ interface Props {
     dbMatchStatuses: Record<string, string>
 }
 
-export default function DynamicDashboardStats({
+export default function DynamicHomeStats({
     myScore, predictions, groupPreds, bracketPreds, totalMatches, myGroupsLength, firstGroupName, myRank, dbMatchStatuses
 }: Props) {
     const [liveMatches, setLiveMatches] = useState<any[]>([])

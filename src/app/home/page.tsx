@@ -13,9 +13,9 @@ import FAQSection from '@/components/FAQSection'
 import LockBanner from '@/components/LockBanner'
 import MotionDiv from '@/components/MotionDiv'
 import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
-import DynamicDashboardStats from '@/components/DynamicDashboardStats'
+import DynamicHomeStats from '@/components/DynamicHomeStats'
 
-export default async function DashboardPage() {
+export default async function HomePage() {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -259,7 +259,7 @@ export default async function DashboardPage() {
                 className="max-w-[1400px] mx-auto px-5 pb-7 md:px-10 md:pb-7"
             >
                 <LockBanner />
-                <DynamicDashboardStats
+                <DynamicHomeStats
                     myScore={myScore}
                     predictions={preds}
                     groupPreds={groupPreds}

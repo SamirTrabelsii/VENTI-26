@@ -196,7 +196,7 @@ const FAQ_ITEMS: FAQItem[] = [
                 Leaderboards are updated in real-time as match results come in.
                 Each group you join has its own leaderboard.
                 Points are accumulated across the entire tournament — group stage + knockout rounds + bracket bonuses all count toward your total.
-                Your rank in each group is shown on the <Link href="/dashboard" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>Dashboard</Link>.
+                Your rank in each group is shown on the <Link href="/home" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 600 }}>Home</Link>.
             </>
         ),
     },
@@ -207,7 +207,7 @@ const FAQ_ITEMS: FAQItem[] = [
             <>
                 The platform pulls live data during matches and updates match statuses automatically.
                 Finished matches trigger the scoring engine which calculates and saves points for all predictions.
-                You don&apos;t need to refresh — the live match section on the dashboard updates in real time.
+                You don&apos;t need to refresh — the live match section on the home page updates in real time.
             </>
         ),
     },
