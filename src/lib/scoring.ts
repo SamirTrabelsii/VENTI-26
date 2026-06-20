@@ -1,33 +1,12 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// VENTI 26 — Scoring Engine
-// ─────────────────────────────────────────────────────────────────────────────
+// VENTI 26 scoring engine
 //
-// ┌─────────────────────────────────────────────────────────────────────────┐
-// │  POINTS SYSTEM — same rules apply to group stage AND knockout phase     │
-// ├─────────────────────────────────────────────────────────────────────────┤
-// │  +25  Exact scoreline          e.g. predicted 2-1, result 2-1          │
-// │  +10  Correct outcome          right winner OR right draw, wrong score  │
-// │  + 5  Correct goal difference  only when outcome correct                │
-// │  +N   Correct goals one team   N = goals scored (min 1), per team       │
-// │                                NOT awarded on exact score               │
-// ├─────────────────────────────────────────────────────────────────────────┤
-// │  KNOCKOUT SUPPLEMENT (draws that go to penalties)                       │
-// │  +10  Correct qualifier        team that actually advances              │
-// │                                                                         │
-// │  The qualifier bonus ONLY applies when the 90-min result is a draw      │
-// │  and the match goes to extra time / penalties.                          │
-// ├─────────────────────────────────────────────────────────────────────────┤
-// │  WORKED EXAMPLES                                                        │
-// │  Pred 2-1 / Real 2-1               → +25 (exact)                       │
-// │  Pred 3-1 / Real 2-0               → +10 +5 = +15 (outcome+diff)       │
-// │  Pred 3-1 / Real 2-1               → +10 +1 = +11 (out+away goal=1)    │
-// │  Pred 2-1 / Real 2-3               → +2 (home goals = 2)               │
-// │  Pred 1-1 / Real 0-0               → +10 +5 = +15 (out+diff)           │
-// │  Pred 3-0 / Real 3-1               → +10 +3 = +13 (out+home goals=3)   │
-// │  Pred 2-2 / Real 2-2 / qual ✓      → +25 +10 = +35 (exact+qualifier)   │
-// │  Pred 2-2 / Real 2-2 / qual ✗      → +25 (exact, wrong qualifier)      │
-// │  Pred 1-1 / Real 0-0 / qual ✓      → +10 +10 = +20 (draw+qualifier)    │
-// └─────────────────────────────────────────────────────────────────────────┘
+// Current match scoring:
+// - +10 for correct outcome (winner or draw)
+// - +15 score proximity, penalized by total score error:
+//   error 0 => +15, 1 => +10, 2 => +6, 3 => +3, 4 => +1, 5+ => +0
+// - Knockout drawn matches can add +10 for the correct qualifier.
+//
+// Legacy scoring has been completely removed in favor of the active backend engine.
 
 export interface BreakdownItem {
     rule: string
@@ -37,110 +16,10 @@ export interface BreakdownItem {
 export interface ScoringResult {
     total: number
     breakdown: BreakdownItem[]
-    // Legacy field kept so existing callers (route.ts) don't break
+    // Legacy field kept so existing callers do not break.
     points: number
     type: 'exact' | 'correct' | 'goal_diff' | 'partial' | 'miss'
 }
-
-export const POINTS = {
-    EXACT_SCORE: 25,
-    CORRECT_OUTCOME: 10,
-    CORRECT_GOAL_DIFF: 5,
-    CORRECT_TEAM_GOALS: 1,  // per team, max ×2 per match
-    KNOCKOUT_QUALIFIER: 10,
-    EARLY_LOCK: 2,  // displayed in UI, applied separately
-} as const
-
-// ─── INTERNAL HELPERS ─────────────────────────────────────────────────────────
-
-function outcome(home: number, away: number): 1 | 0 | -1 {
-    if (home > away) return 1
-    if (home < away) return -1
-    return 0
-}
-
-function classifyType(breakdown: BreakdownItem[]): ScoringResult['type'] {
-    const rules = breakdown.map(b => b.rule)
-    if (rules.includes('Exact scoreline')) return 'exact'
-    if (rules.includes('Correct goal difference')) return 'goal_diff'
-    if (rules.includes('Correct outcome')) return 'correct'
-    if (breakdown.length > 0) return 'partial'
-    return 'miss'
-}
-
-// ─── CORE SCORER (group stage rules, no qualifier) ────────────────────────────
-
-function coreScore(
-    predHome: number,
-    predAway: number,
-    realHome: number,
-    realAway: number,
-): BreakdownItem[] {
-    const bd: BreakdownItem[] = []
-
-    // ── Rule 1: Exact scoreline ──────────────────────────────────────────────
-    const isExact = predHome === realHome && predAway === realAway
-    if (isExact) {
-        bd.push({ rule: 'Exact scoreline', pts: POINTS.EXACT_SCORE })
-        // Exact score is terminal — no other rules apply
-        return bd
-    }
-
-    // ── Rule 2: Correct outcome ──────────────────────────────────────────────
-    const predOutcome = outcome(predHome, predAway)
-    const realOutcome = outcome(realHome, realAway)
-
-    if (predOutcome === realOutcome) {
-        bd.push({ rule: 'Correct outcome', pts: POINTS.CORRECT_OUTCOME })
-
-        // ── Rule 3: Goal difference ──────────────────────────────────────────────
-        const predDiff = Math.abs(predHome - predAway)
-        const realDiff = Math.abs(realHome - realAway)
-        if (predDiff === realDiff) {
-            bd.push({ rule: 'Correct goal difference', pts: POINTS.CORRECT_GOAL_DIFF })
-        }
-    }
-
-    // ── Rule 4: Individual team goals (independent of outcome, not on exact) ─
-    if (predHome === realHome) {
-        const pts = Math.max(1, realHome)
-        bd.push({ rule: 'Correct home team goals', pts })
-    }
-    if (predAway === realAway) {
-        const pts = Math.max(1, realAway)
-        bd.push({ rule: 'Correct away team goals', pts })
-    }
-
-    return bd
-}
-
-// ─── PUBLIC: GROUP STAGE ──────────────────────────────────────────────────────
-
-export function scoreGroupMatch(
-    predHome: number,
-    predAway: number,
-    realHome: number,
-    realAway: number,
-): ScoringResult {
-    const breakdown = coreScore(predHome, predAway, realHome, realAway)
-    const total = breakdown.reduce((s, b) => s + b.pts, 0)
-    return {
-        total,
-        breakdown,
-        points: total,           // legacy alias
-        type: classifyType(breakdown),
-    }
-}
-
-// ─── PUBLIC: KNOCKOUT STAGE ───────────────────────────────────────────────────
-//
-// predQualifier / realQualifier: the team code that the player picked /
-// that actually advanced (e.g. 'BRA', 'FRA').
-// Pass null for realQualifier when the match result is not yet known.
-//
-// The qualifier bonus ONLY makes sense when the 90-min result is a draw
-// (the match went to extra time / penalties). For non-draw knockout results,
-// the winner is already determined by the 90-min score so no bonus applies.
 
 export interface ScoringOptions {
     predQualifier?: string | null
@@ -150,12 +29,79 @@ export interface ScoringOptions {
     isFixtureCorrect?: boolean
 }
 
-export function scoreKnockoutMatch(
+export const POINTS = {
+    EXACT_SCORE: 25,
+    CORRECT_OUTCOME: 10,
+    PROXIMITY_MAX: 15,
+    KNOCKOUT_QUALIFIER: 10,
+    EARLY_LOCK: 2,
+} as const
+
+const PROXIMITY_POINTS_BY_ERROR: Record<number, number> = {
+    0: 15,
+    1: 10,
+    2: 6,
+    3: 3,
+    4: 1,
+}
+
+function outcome(home: number, away: number): 1 | 0 | -1 {
+    if (home > away) return 1
+    if (home < away) return -1
+    return 0
+}
+
+function proximityPoints(totalError: number): number {
+    if (totalError >= 5) return 0
+    return PROXIMITY_POINTS_BY_ERROR[totalError] ?? 0
+}
+
+function classifyType(breakdown: BreakdownItem[]): ScoringResult['type'] {
+    const rules = breakdown.map(b => b.rule)
+    if (rules.includes('Exact scoreline')) return 'exact'
+    if (rules.includes('Score proximity (error 0)')) return 'exact'
+    if (rules.includes('Correct goal difference')) return 'goal_diff'
+    if (rules.includes('Correct outcome')) return 'correct'
+    if (breakdown.some(b => b.pts > 0)) return 'partial'
+    return 'miss'
+}
+
+function toResult(breakdown: BreakdownItem[]): ScoringResult {
+    const total = breakdown.reduce((s, b) => s + b.pts, 0)
+    return {
+        total,
+        breakdown,
+        points: total,
+        type: classifyType(breakdown),
+    }
+}
+
+function coreScore(
     predHome: number,
     predAway: number,
     realHome: number,
     realAway: number,
-    options: ScoringOptions = {}
+): BreakdownItem[] {
+    const breakdown: BreakdownItem[] = []
+
+    if (outcome(predHome, predAway) === outcome(realHome, realAway)) {
+        breakdown.push({ rule: 'Correct outcome', pts: POINTS.CORRECT_OUTCOME })
+    }
+
+    const totalError = Math.abs(predHome - realHome) + Math.abs(predAway - realAway)
+    breakdown.push({
+        rule: `Score proximity (error ${totalError >= 5 ? '5+' : totalError})`,
+        pts: proximityPoints(totalError),
+    })
+
+    return breakdown
+}
+
+function applyKnockoutExtras(
+    breakdown: BreakdownItem[],
+    realHome: number,
+    realAway: number,
+    options: ScoringOptions,
 ): ScoringResult {
     const {
         predQualifier = null,
@@ -165,52 +111,59 @@ export function scoreKnockoutMatch(
         isFixtureCorrect = true,
     } = options
 
-    // Fixture Validation Rule: If using original prediction and teams are wrong -> 0 points
-    if (!isRepredicted && !isFixtureCorrect) {
+    if (outcome(realHome, realAway) === 0 && predQualifier && realQualifier && predQualifier === realQualifier) {
+        breakdown.push({
+            rule: 'Correct qualifier (knockout)',
+            pts: POINTS.KNOCKOUT_QUALIFIER,
+        })
+    }
+
+    let result = toResult(breakdown)
+
+    if (!isRepredicted && isFixtureCorrect && multiplier > 1 && result.total > 0) {
+        const bonus = (result.total * multiplier) - result.total
+        breakdown.push({
+            rule: `Original Prediction Multiplier (x${multiplier})`,
+            pts: bonus,
+        })
+        result = toResult(breakdown)
+    }
+
+    return result
+}
+
+function scoreGroupMatch(
+    predHome: number,
+    predAway: number,
+    realHome: number,
+    realAway: number,
+): ScoringResult {
+    return toResult(coreScore(predHome, predAway, realHome, realAway))
+}
+
+function scoreKnockoutMatch(
+    predHome: number,
+    predAway: number,
+    realHome: number,
+    realAway: number,
+    options: ScoringOptions = {},
+): ScoringResult {
+    if (!options.isRepredicted && options.isFixtureCorrect === false) {
         return {
             total: 0,
             breakdown: [{ rule: 'Invalid fixture (Original Prediction)', pts: 0 }],
             points: 0,
-            type: 'miss'
+            type: 'miss',
         }
     }
 
-    const breakdown = coreScore(predHome, predAway, realHome, realAway)
-
-    // ── Qualifier bonus — only when result is a draw (penalties situation) ───
-    const realOutcome = outcome(realHome, realAway)
-    const isDraw = realOutcome === 0
-
-    if (isDraw && predQualifier && realQualifier) {
-        if (predQualifier === realQualifier) {
-            breakdown.push({
-                rule: 'Correct qualifier (knockout)',
-                pts: POINTS.KNOCKOUT_QUALIFIER,
-            })
-        }
-    }
-
-    let total = breakdown.reduce((s, b) => s + b.pts, 0)
-
-    // Original Prediction Multiplier
-    if (!isRepredicted && isFixtureCorrect && multiplier > 1 && total > 0) {
-        const bonus = (total * multiplier) - total
-        breakdown.push({
-            rule: `Original Prediction Multiplier (x${multiplier})`,
-            pts: bonus
-        })
-        total *= multiplier
-    }
-
-    return {
-        total,
-        breakdown,
-        points: total,
-        type: classifyType(breakdown),
-    }
+    return applyKnockoutExtras(
+        coreScore(predHome, predAway, realHome, realAway),
+        realHome,
+        realAway,
+        options,
+    )
 }
-
-// ─── PUBLIC: UNIFIED ENTRY POINT ──────────────────────────────────────────────
 
 export function scoreMatch(
     predHome: number,
@@ -218,38 +171,33 @@ export function scoreMatch(
     realHome: number,
     realAway: number,
     isKnockout = false,
-    options: ScoringOptions = {}
+    options: ScoringOptions = {},
 ): ScoringResult {
     return isKnockout
         ? scoreKnockoutMatch(predHome, predAway, realHome, realAway, options)
         : scoreGroupMatch(predHome, predAway, realHome, realAway)
 }
 
-// ─── FORMATTING ───────────────────────────────────────────────────────────────
-
 export function formatPoints(pts: number): string {
     return pts > 0 ? `+${pts}` : `${pts}`
 }
 
-// ─── SCORING REFERENCE (used in UI — insights page formula display) ───────────
-
 export const SCORING_REFERENCE = {
     groupAndKnockout: [
-        { pts: 25, label: 'Exact score', note: 'Perfect scoreline — terminal, no other rules stack' },
-        { pts: 10, label: 'Correct outcome', note: 'Right winner or draw, any scoreline' },
-        { pts: 5, label: 'Goal difference', note: 'Right margin — applies to all correct outcomes including draws' },
-        { pts: 'N', label: 'Team goals (per team)', note: 'N = number of goals correctly predicted (min 1 for 0-0). Not awarded on exact score' },
+        { pts: 10, label: 'Correct outcome', note: 'Right winner or draw. Miss the outcome and this bonus is lost.' },
+        { pts: 15, label: 'Score proximity', note: 'Starts at +15 and decreases with total score error: 0=15, 1=10, 2=6, 3=3, 4=1, 5+=0.' },
+        { pts: 25, label: 'Maximum score', note: 'Exact scoreline gives +10 outcome and +15 proximity.' },
     ],
     knockoutSupplement: [
-        { pts: 10, label: 'Correct qualifier', note: 'Team that advances after penalties — only on drawn 90-min results' },
-        { pts: 35, label: 'Maximum per match', note: 'Exact score (25) + correct qualifier (10)' },
+        { pts: 10, label: 'Correct qualifier', note: 'Team that advances after penalties. Applies only when the 90-minute result is a draw.' },
+        { pts: 35, label: 'Maximum knockout match', note: 'Exact score (25) + correct qualifier (10).' },
     ],
     originalMultipliers: [
-        { round: 'R32', label: 'Round of 32', multiplier: 1.5, note: 'Your original locked prediction × 1.5' },
-        { round: 'R16', label: 'Round of 16', multiplier: 2, note: 'Your original locked prediction × 2' },
-        { round: 'QF', label: 'Quarter-Finals', multiplier: 3, note: 'Your original locked prediction × 3' },
-        { round: 'SF', label: 'Semi-Finals', multiplier: 4, note: 'Your original locked prediction × 4' },
-        { round: 'F', label: 'Final', multiplier: 5, note: 'Your original locked prediction × 5' },
+        { round: 'R32', label: 'Round of 32', multiplier: 1.5, note: 'Your original locked prediction x 1.5' },
+        { round: 'R16', label: 'Round of 16', multiplier: 2, note: 'Your original locked prediction x 2' },
+        { round: 'QF', label: 'Quarter-Finals', multiplier: 3, note: 'Your original locked prediction x 3' },
+        { round: 'SF', label: 'Semi-Finals', multiplier: 4, note: 'Your original locked prediction x 4' },
+        { round: 'F', label: 'Final', multiplier: 5, note: 'Your original locked prediction x 5' },
     ],
     bracketBonuses: [
         { pts: 1, label: 'Per qualifier (R32)', note: 'Each original team pick that makes the Round of 32' },

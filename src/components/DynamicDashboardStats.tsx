@@ -50,8 +50,7 @@ export default function DynamicDashboardStats({
 
         const activeMatchesWithDbId = liveMatches.map(lm => {
             const staticMatch = ALL_MATCHES.find((sm: any) =>
-                (sm.home_team === lm.homeTeam?.name || sm.home_team === lm.homeTeam?.shortName) &&
-                (sm.away_team === lm.awayTeam?.name || sm.away_team === lm.awayTeam?.shortName)
+                sm.home_team === lm.homeTeam?.tla && sm.away_team === lm.awayTeam?.tla
             )
             return { ...lm, dbId: staticMatch?.id, isKo: staticMatch ? ['R32','R16','QF','SF','3RD','FINAL'].includes(staticMatch.group_label) : false }
         }).filter((m: any) => m.dbId)

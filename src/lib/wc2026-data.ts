@@ -1463,18 +1463,11 @@ export function getRobohashUrl(seed: string, size: number = 100): string {
 }
 
 export const TOURNAMENT_LOCK = '2026-06-12T20:00:00Z' // Second kickoff: all original predictions lock
-export const KNOCKOUT_FINAL_LOCK = '2026-07-19T15:00:00Z' // Final kickoff: all live bracket predictions closed
 
 export function getTournamentPhase(): 'PRE_TOURNAMENT' | 'KNOCKOUT_OPEN' | 'FINAL_LOCK' {
     const now = new Date()
     if (now < new Date(TOURNAMENT_LOCK)) return 'PRE_TOURNAMENT'
-    if (now < new Date(KNOCKOUT_FINAL_LOCK)) return 'KNOCKOUT_OPEN'
     return 'FINAL_LOCK'
-}
-
-export function isBracketLocked(): boolean {
-    const phase = getTournamentPhase()
-    return phase === 'FINAL_LOCK'
 }
 
 export function isGlobalLockPassed(): boolean {
@@ -1485,20 +1478,6 @@ export function isGlobalLockPassed(): boolean {
 export function getAdjustedKickoff(utcString: string): Date {
     return new Date(utcString)
 }
-
-export const POINTS = {
-    EXACT_SCORE: 15,
-    CORRECT_RESULT: 5,
-    R16_PICK: 10,
-    QF_PICK: 15,
-    SF_PICK: 20,
-    FINAL_PICK: 30,
-    CHAMPION: 50,
-    EARLY_LOCK: 2,
-}
-
-export const BRACKET_ROUNDS = ['r32', 'r16', 'qf', 'sf', 'final', 'champion'] as const
-export type BracketRound = typeof BRACKET_ROUNDS[number]
 
 export const R32_SLOTS: Array<[string, string]> = [
     ['2A', '2B'],
@@ -1517,19 +1496,4 @@ export const R32_SLOTS: Array<[string, string]> = [
     ['2D', '2G'],
     ['1J', '2H'],
     ['1K', 'T3'],
-]
-
-export const ACHIEVEMENTS = [
-    { id: 'sharpshooter', icon: '🎯', label: 'Sharpshooter', description: '3 exact scores in one round' },
-    { id: 'hot_streak', icon: '🔥', label: 'Hot Streak', description: '5 correct results in a row' },
-    { id: 'giant_killer', icon: '⚡', label: 'Giant Killer', description: 'Correctly predict 3 upsets' },
-    { id: 'recruiter', icon: '🤝', label: 'The Recruiter', description: 'Create a group with 5+ players' },
-    { id: 'score_oracle', icon: '🔢', label: 'Score Oracle', description: '10 exact scores total' },
-    { id: 'pole_position', icon: '📈', label: 'Pole Position', description: 'Lead your group at end of group stage' },
-    { id: 'contrarian', icon: '🧠', label: 'The Contrarian', description: 'Outpredict the community 10 times' },
-    { id: 'perfect_day', icon: '✨', label: 'Perfect Day', description: 'All matches on a single day correct' },
-    { id: 'hat_trick_hero', icon: '🎩', label: 'Hat-trick Hero', description: '3 exact scores in 3 consecutive matches' },
-    { id: 'final_whistle', icon: '🏟️', label: 'Final Whistle', description: 'Predict the WC Final exact score' },
-    { id: 'the_oracle', icon: '🔮', label: 'The Oracle', description: 'Top 1% accuracy globally' },
-    { id: 'nostradamus', icon: '👑', label: 'Nostradamus', description: 'Predict the champion correctly' },
 ]

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
-import { scoreMatch } from '@/lib/scoring'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { scoreMatch } from '@/lib/scoring'
 
 const TOTAL_MATCHES = 104
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
@@ -22,265 +23,295 @@ export interface LeaderboardUser {
     total_preds: number
 }
 
-interface Prediction {
-    user_id: string
-    match_id: string
-    home_score: number
-    away_score: number
-}
-
 interface LeaderboardClientProps {
     initialLeaderboard: LeaderboardUser[]
-    predictions: Prediction[]
+    initialLiveMatches?: any[]
+    livePredictions?: any[]
     currentUserId?: string
-    dbMatchStatuses?: Record<string, string>
 }
 
-export default function LeaderboardClient({ initialLeaderboard, predictions, currentUserId, dbMatchStatuses = {} }: LeaderboardClientProps) {
+export default function LeaderboardClient({ initialLeaderboard, initialLiveMatches = [], livePredictions = [], currentUserId }: LeaderboardClientProps) {
     const router = useRouter()
-    const [liveMatches, setLiveMatches] = useState<any[]>([])
+    const [currentLeaderboard, setCurrentLeaderboard] = useState<LeaderboardUser[]>(initialLeaderboard)
+    const [liveMatches, setLiveMatches] = useState<any[]>(initialLiveMatches)
 
-    // Poll live matches every 60s
     useEffect(() => {
-        const fetchLive = async () => {
-            try {
-                const res = await fetch('/api/matches/live', { cache: 'no-store' })
-                if (res.ok) {
-                    const data = await res.json()
-                    setLiveMatches(data.matches || [])
-                }
-            } catch { }
-        }
-        fetchLive()
-        const int = setInterval(fetchLive, 60_000)
-        return () => clearInterval(int)
+        setCurrentLeaderboard(initialLeaderboard)
+        setLiveMatches(initialLiveMatches)
+    }, [initialLeaderboard, initialLiveMatches])
+
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase.channel('leaderboard_realtime')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'scores' }, (payload) => {
+                setCurrentLeaderboard(prev => prev.map(u => {
+                    if (u.id === payload.new.user_id && payload.new.group_id === 'global') {
+                        return {
+                            ...u,
+                            total_points: payload.new.total_points,
+                            exact_scores: payload.new.exact_scores,
+                            correct_results: payload.new.correct_results,
+                            streak: payload.new.streak,
+                        }
+                    }
+                    return u
+                }))
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+                setLiveMatches(prev => {
+                    const matchIdx = prev.findIndex(m => m.id === payload.new.id)
+                    if (payload.new.status === 'live') {
+                        if (matchIdx >= 0) {
+                            const newArr = [...prev]
+                            newArr[matchIdx] = payload.new
+                            return newArr
+                        } else {
+                            return [...prev, payload.new]
+                        }
+                    } else {
+                        // If it's no longer live, remove it from live array
+                        return prev.filter(m => m.id !== payload.new.id)
+                    }
+                })
+            })
+            .subscribe()
+
+        return () => { supabase.removeChannel(channel) }
     }, [])
 
-    // Recalculate leaderboard dynamically
     const dynamicLeaderboard = useMemo(() => {
-        // Find which matches are actively in-play or recently finished but maybe not synced to DB yet
-        // A live match is one from the API that is IN_PLAY or PAUSED or FINISHED. 
-        // For FINISHED matches, we only calculate points if the DB sync hasn't run yet (db status != 'finished').
-        // If db status == 'finished', the backend cron has officially synced the score to the DB, so we don't double-count.
-        const activeLiveMatches = liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED')
+        const mapped = currentLeaderboard.map(user => {
+            let liveBonus = 0
+            let exactBonus = 0
+            let correctBonus = 0
 
-        if (activeLiveMatches.length === 0) {
-            return initialLeaderboard
-        }
-
-        // We need to map api_id to our DB id
-        const activeMatchesWithDbId = activeLiveMatches.map(lm => {
-            const dbMatch = ALL_MATCHES.find(m => m.home_team === lm.homeTeam.tla && m.away_team === lm.awayTeam.tla)
-            return {
-                ...lm,
-                dbId: dbMatch?.id,
-                isKo: dbMatch ? ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label) : false
-            }
-        }).filter(m => m.dbId)
-
-        return initialLeaderboard.map(user => {
-            let activeLiveBonus = 0
-            let pendingFinishedBonus = 0
-            let dynamicStreak = user.streak
-            let dynamicExact = user.exact_scores
-            let dynamicCorrect = user.correct_results
-
-            const unsyncedFinished = activeMatchesWithDbId.filter(lm => lm.status === 'FINISHED' && dbMatchStatuses[lm.dbId] !== 'finished')
-            unsyncedFinished.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-
-            for (const lm of unsyncedFinished) {
-                const pred = predictions.find(p => p.user_id === user.id && p.match_id === lm.dbId)
-                if (pred && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
-                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
-                    if (res.type === 'exact') dynamicExact++
-                    if (['correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
-                    if (['exact', 'correct', 'goal_diff'].includes(res.type)) {
-                        dynamicStreak++
-                    } else {
-                        dynamicStreak = 0
-                    }
-                } else {
-                    // Missed prediction — break streak
-                    dynamicStreak = 0
-                }
-            }
-
-            for (const lm of activeMatchesWithDbId) {
-                const pred = predictions.find(p => p.user_id === user.id && p.match_id === lm.dbId)
-                const isSyncedToDb = dbMatchStatuses[lm.dbId] === 'finished'
-                if (pred && !isSyncedToDb && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
-                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
-                    
-                    if (lm.status === 'FINISHED') {
-                        pendingFinishedBonus += res.total
-                    } else {
-                        activeLiveBonus += res.total
-                    }
+            // Add points for any currently live matches
+            for (const match of liveMatches) {
+                if (match.home_score === null || match.away_score === null) continue
+                
+                const pred = livePredictions.find(p => p.user_id === user.id && p.match_id === match.id)
+                if (pred) {
+                    const isKnockout = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(match.group_label)
+                    const result = scoreMatch(
+                        pred.home_score, pred.away_score,
+                        match.home_score, match.away_score,
+                        isKnockout,
+                        { predQualifier: pred.qualifier_pick, realQualifier: match.qualifier }
+                    )
+                    liveBonus += result.total
+                    if (result.type === 'exact') exactBonus += 1
+                    if (result.type === 'correct' || result.type === 'goal_diff') correctBonus += 1
                 }
             }
 
             return {
                 ...user,
-                display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
-                live_bonus: activeLiveBonus,
-                dynamic_streak: dynamicStreak,
-                dynamic_exact: dynamicExact,
-                dynamic_correct: dynamicCorrect
+                display_points: user.total_points + liveBonus,
+                live_bonus: liveBonus,
+                dynamic_streak: user.streak,
+                dynamic_exact: user.exact_scores + exactBonus,
+                dynamic_correct: user.correct_results + correctBonus
             }
-        }).sort((a, b) =>
-            b.display_points - a.display_points
-            || b.total_preds - a.total_preds
-            || a.display_name.localeCompare(b.display_name)
-        )
-    }, [initialLeaderboard, predictions, liveMatches, dbMatchStatuses])
+        })
+        mapped.sort((a, b) => b.display_points - a.display_points)
+        return mapped
+    }, [currentLeaderboard, liveMatches, livePredictions])
+
+    const top3 = dynamicLeaderboard.slice(0, 3)
+    const rest = dynamicLeaderboard.slice(3)
+    const podiumLayout = [top3[1], top3[0], top3[2]] // 2nd, 1st, 3rd
 
     return (
         <>
             <style>{`
                 @media (max-width: 640px) {
                     .hide-on-mobile { display: none !important; }
+                    .podium-container { transform: scale(0.85); margin-bottom: 20px !important; }
                 }
             `}</style>
+
+            {/* Top 3 Podium */}
+            {top3.length > 0 && (
+                <div className="podium-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 16, marginBottom: 60, marginTop: 20 }}>
+                    {podiumLayout.map((user, i) => {
+                        if (!user) return null
+                        const rank = i === 0 ? 2 : i === 1 ? 1 : 3
+                        const height = rank === 1 ? 180 : rank === 2 ? 140 : 120
+                        const color = rank === 1 ? 'var(--gold)' : rank === 2 ? '#C0C0C0' : '#CD7F32'
+                        const isMe = currentUserId && user.id === currentUserId
+
+                        return (
+                            <div key={user.id} onClick={() => router.push(`/profile?id=${user.id}`)} style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', width: 130, cursor: 'pointer',
+                                transform: 'translateY(0)', transition: 'transform 0.2s',
+                            }}
+                                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-10px)'}
+                                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                                <div style={{ position: 'relative', marginBottom: -20, zIndex: 10 }}>
+                                    <img src={getRobohashUrl(user.display_name, rank === 1 ? 100 : 80)} style={{
+                                        width: rank === 1 ? 100 : 80, height: rank === 1 ? 100 : 80, borderRadius: '50%',
+                                        border: `4px solid ${color}`, background: user.avatar_color, objectFit: 'cover'
+                                    }} />
+                                    <div style={{
+                                        position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)',
+                                        background: color, color: '#000', width: 32, height: 32, borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 18,
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                                    }}>
+                                        {rank}
+                                    </div>
+                                    {isMe && <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'var(--gold)', color: '#000', fontSize: 10, padding: '2px 8px', borderRadius: 8, fontWeight: 800 }}>YOU</div>}
+                                </div>
+                                <div style={{
+                                    width: '100%', height: height, background: isMe ? 'rgba(212,168,67,0.1)' : 'var(--surface2)',
+                                    border: `1px solid ${color}`, borderBottom: 'none',
+                                    borderTopLeftRadius: 16, borderTopRightRadius: 16,
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 35,
+                                    boxShadow: rank === 1 ? '0 -10px 40px rgba(212,168,67,0.15)' : 'none'
+                                }}>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', padding: '0 8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{user.display_name}</div>
+                                    <div style={{ fontSize: 32, fontFamily: 'Bebas Neue', color: color, marginTop: 4, lineHeight: 1 }}>{user.display_points}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 4, alignItems: 'center' }}>
+                                        {user.live_bonus > 0 && <span style={{ color: 'var(--gold)', fontWeight: 'bold' }}>+{user.live_bonus} live</span>}
+                                        PTS
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+
             <div style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: 18,
                 overflow: 'hidden',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
             }}>
-            {/* Header */}
-            <div style={{
-                display: 'flex', alignItems: 'center', padding: '16px 20px',
-                borderBottom: '1px solid var(--border)', background: 'var(--surface2)',
-                fontSize: 11, fontWeight: 600, letterSpacing: 1.5,
-                textTransform: 'uppercase', color: 'var(--muted)'
-            }}>
-                <div style={{ width: 40, textAlign: 'center' }}>Rank</div>
-                <div style={{ flex: 1, paddingLeft: 16 }}>Player</div>
-                <div className="hide-on-mobile" style={{ width: 130, textAlign: 'center' }}>Progress</div>
-                <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Exact</div>
-                <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center' }}>Correct</div>
-                <div style={{ width: 100, textAlign: 'right' }}>Total Pts</div>
-            </div>
-
-            {/* Rows */}
-            {dynamicLeaderboard.length === 0 ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                    No users have signed up yet.
+                {/* Header */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', padding: '16px 20px',
+                    borderBottom: '1px solid var(--border)', background: 'var(--surface2)',
+                    fontSize: 11, fontWeight: 600, letterSpacing: 1.5,
+                    textTransform: 'uppercase', color: 'var(--muted)'
+                }}>
+                    <div style={{ width: 40, textAlign: 'center' }}>Rank</div>
+                    <div style={{ flex: 1, paddingLeft: 16 }}>Player</div>
+                    <div className="hide-on-mobile" style={{ width: 130, textAlign: 'center' }}>Progress</div>
+                    <div className="hide-on-mobile" style={{ width: 80, textAlign: 'center' }}>Stats</div>
+                    <div style={{ width: 100, textAlign: 'right' }}>Total Pts</div>
                 </div>
-            ) : (
-                dynamicLeaderboard.map((row: any, index) => {
-                    const isMe = currentUserId && row.id === currentUserId
-                    const progressPct = Math.round((row.total_preds / TOTAL_MATCHES) * 100)
 
-                    let progressColor = 'var(--muted)'
-                    let progressLabel = 'Not started'
-                    if (progressPct === 100) {
-                        progressColor = 'var(--green-bright)'
-                        progressLabel = 'Complete'
-                    } else if (progressPct > 0) {
-                        progressColor = 'var(--gold)'
-                        progressLabel = `${row.total_preds}/${TOTAL_MATCHES}`
-                    }
+                {/* Rows */}
+                {rest.length === 0 && top3.length === 0 ? (
+                    <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 15 }}>
+                        No users have signed up yet.
+                    </div>
+                ) : (
+                    rest.map((row: any, index) => {
+                        const isMe = currentUserId && row.id === currentUserId
+                        const progressPct = Math.round((row.total_preds / TOTAL_MATCHES) * 100)
+                        const actualRank = index + 4 // Because we sliced 3
 
-                    return (
-                        <div key={row.id} 
-                             onClick={() => router.push(`/profile?id=${row.id}`)}
-                             style={{
-                            display: 'flex', alignItems: 'center', padding: '14px 20px',
-                            borderBottom: '1px solid var(--border)',
-                            background: isMe ? 'rgba(212,168,67,0.06)' : 'transparent',
-                            transition: 'background 0.15s',
-                            cursor: 'pointer'
-                        }}
-                        onMouseEnter={e => {
-                            if (!isMe) e.currentTarget.style.background = 'var(--surface2)'
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.background = isMe ? 'rgba(212,168,67,0.06)' : 'transparent'
-                        }}>
-                            {/* Rank */}
-                            <div style={{
-                                width: 40, textAlign: 'center',
-                                fontFamily: 'Bebas Neue', fontSize: 24,
-                                color: index < 3 ? 'var(--gold)' : 'var(--muted)'
-                            }}>
-                                {index < 3 ? ['🥇', '🥈', '🥉'][index] : index + 1}
-                            </div>
-
-                            {/* Player */}
-                            <div style={{ flex: 1, paddingLeft: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <img
-                                    src={getRobohashUrl(row.display_name, 60)}
-                                    alt={row.display_name}
-                                    style={{
-                                        width: 36, height: 36, borderRadius: '50%',
-                                        background: row.avatar_color,
-                                        flexShrink: 0,
-                                        objectFit: 'cover',
-                                    }}
-                                />
-                                <div>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: isMe ? 'var(--gold)' : 'var(--cream)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        {row.display_name}
-                                        {isMe && <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--gold)', color: '#000', borderRadius: 4, fontWeight: 700 }}>YOU</span>}
-                                    </div>
-                                    {row.dynamic_streak > 0 && (
-                                        <div style={{ fontSize: 11, color: '#e05c4a', marginTop: 2 }}>
-                                            🔥 {row.dynamic_streak} streak
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Progress */}
-                            <div className="hide-on-mobile" style={{ width: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        return (
+                            <div key={row.id}
+                                onClick={() => router.push(`/profile?id=${row.id}`)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', padding: '16px 20px',
+                                    borderBottom: '1px solid var(--border)',
+                                    background: isMe ? 'rgba(212,168,67,0.06)' : 'transparent',
+                                    transition: 'all 0.2s ease',
+                                    cursor: 'pointer'
+                                }}
+                                onMouseEnter={e => {
+                                    if (!isMe) e.currentTarget.style.background = 'var(--surface2)'
+                                    e.currentTarget.style.transform = 'scale(1.01)'
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = isMe ? 'rgba(212,168,67,0.06)' : 'transparent'
+                                    e.currentTarget.style.transform = 'scale(1)'
+                                }}>
+                                {/* Rank */}
                                 <div style={{
-                                    width: '100%', height: 6, borderRadius: 3,
-                                    background: 'var(--surface3)', overflow: 'hidden',
+                                    width: 40, textAlign: 'center',
+                                    fontFamily: 'Bebas Neue', fontSize: 24, color: 'var(--muted)'
+                                }}>
+                                    {actualRank}
+                                </div>
+
+                                {/* Player */}
+                                <div style={{ flex: 1, paddingLeft: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <img
+                                        src={getRobohashUrl(row.display_name, 60)}
+                                        alt={row.display_name}
+                                        style={{
+                                            width: 44, height: 44, borderRadius: '50%',
+                                            background: row.avatar_color,
+                                            flexShrink: 0, objectFit: 'cover',
+                                            border: '2px solid var(--border)'
+                                        }}
+                                    />
+                                    <div>
+                                        <div style={{ fontSize: 16, fontWeight: 600, color: isMe ? 'var(--gold)' : 'var(--cream)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            {row.display_name}
+                                            {isMe && <span style={{ fontSize: 10, padding: '2px 8px', background: 'var(--gold)', color: '#000', borderRadius: 6, fontWeight: 800 }}>YOU</span>}
+                                        </div>
+                                        {row.dynamic_streak > 0 && (
+                                            <div style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                                🔥 {row.dynamic_streak} Streak
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Progress */}
+                                <div className="hide-on-mobile" style={{ width: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                                    <div style={{
+                                        width: '100%', height: 6, borderRadius: 3,
+                                        background: 'var(--surface3)', overflow: 'hidden',
+                                    }}>
+                                        <div style={{
+                                            height: '100%', borderRadius: 3,
+                                            background: progressPct === 100 ? 'var(--green-bright)' : progressPct > 0 ? 'var(--gold)' : 'transparent',
+                                            width: `${progressPct}%`,
+                                        }} />
+                                    </div>
+                                    <div style={{ fontSize: 10, fontWeight: 600, color: progressPct === 100 ? 'var(--green-bright)' : progressPct > 0 ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.5 }}>
+                                        {progressPct === 100 ? 'Complete' : progressPct > 0 ? `${row.total_preds}/${TOTAL_MATCHES}` : 'Not started'}
+                                    </div>
+                                </div>
+
+                                {/* Stats */}
+                                <div className="hide-on-mobile" style={{ width: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                    <div style={{ fontSize: 11, background: 'rgba(212,168,67,0.1)', color: 'var(--gold)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                                        {row.dynamic_exact} EX
+                                    </div>
+                                    <div style={{ fontSize: 11, background: 'var(--surface3)', color: 'var(--cream)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                                        {row.dynamic_correct} CR
+                                    </div>
+                                </div>
+
+                                {/* Total Points */}
+                                <div style={{
+                                    width: 100, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center'
                                 }}>
                                     <div style={{
-                                        height: '100%', borderRadius: 3,
-                                        background: progressPct === 100 ? 'var(--green-bright)' : progressPct > 0 ? 'var(--gold)' : 'transparent',
-                                        width: `${progressPct}%`,
-                                        transition: 'width 0.6s ease',
-                                    }} />
-                                </div>
-                                <div style={{ fontSize: 10, fontWeight: 600, color: progressColor, letterSpacing: 0.5 }}>
-                                    {progressLabel}
-                                </div>
-                            </div>
-
-                            {/* Exact */}
-                            <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                {row.dynamic_exact}
-                            </div>
-
-                            {/* Correct */}
-                            <div className="hide-on-mobile" style={{ width: 70, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                {row.dynamic_correct}
-                            </div>
-
-                            {/* Total Points */}
-                            <div style={{
-                                width: 100, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center'
-                            }}>
-                                <div style={{
-                                    fontFamily: 'Bebas Neue', fontSize: 28,
-                                    color: row.display_points > 0 ? 'var(--cream)' : 'var(--muted)',
-                                    lineHeight: 1
-                                }}>
-                                    {row.display_points}
-                                </div>
-                                {row.live_bonus > 0 && (
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', marginTop: 2, background: 'rgba(212,168,67,0.1)', padding: '2px 6px', borderRadius: 4 }}>
-                                        +{row.live_bonus} LIVE
+                                        fontFamily: 'Bebas Neue', fontSize: 32,
+                                        color: row.display_points > 0 ? 'var(--cream)' : 'var(--muted)',
+                                        lineHeight: 1
+                                    }}>
+                                        {row.display_points}
                                     </div>
-                                )}
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 4, alignItems: 'center' }}>
+                                        {row.live_bonus > 0 && <span style={{ color: 'var(--gold)', fontWeight: 'bold' }}>+{row.live_bonus} live</span>}
+                                        PTS
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    )
-                })
-            )}
+                        )
+                    })
+                )}
             </div>
         </>
     )

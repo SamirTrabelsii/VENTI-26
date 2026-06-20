@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { getRobohashUrl } from '@/lib/wc2026-data'
 import { Home, CalendarDays, Edit3, Users, Trophy, Globe, LogOut, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import WhatsNewCarousel from '@/components/WhatsNewCarousel'
 
 const TABS = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -211,6 +212,8 @@ export default function Nav({ initials = 'PL', displayName, isGuest }: { initial
                     })}
                 </div>
             </nav>
+
+            <WhatsNewCarousel isGuest={isGuest} />
         </>
     )
 }

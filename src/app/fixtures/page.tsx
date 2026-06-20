@@ -25,10 +25,7 @@ export default async function FixturesPage() {
     // Fetch DB matches to know status and scores of finished/live games
     const { data: dbMatches } = await supabase
         .from('matches')
-        .select('id, status, home_score, away_score')
-
-    // Fetch REAL API fixtures to ensure 100% accurate calendar dates
-    let apiMatches: any[] = []
+        .select('id, status, home_score, away_score, kickoff')
 
     const displayName = profile?.display_name ?? profile?.email ?? 'Player'
 
@@ -40,7 +37,6 @@ export default async function FixturesPage() {
                 <FixturesClient 
                     predictions={preds ?? []} 
                     dbMatches={dbMatches ?? []} 
-                    apiMatches={apiMatches}
                 />
             </div>
         </div>

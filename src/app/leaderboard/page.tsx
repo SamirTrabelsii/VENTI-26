@@ -27,14 +27,15 @@ export default async function LeaderboardPage() {
         supabase.from('profiles').select('id, display_name, avatar_initials, avatar_color').order('created_at', { ascending: true })
     )
 
-    // 2. Fetch scores (deduplicated per user)
+    // 2. Fetch scores (deduplicated per user — take MAX across all group rows)
     const scoresData = await fetchAllRows(
         supabase.from('scores').select('user_id, total_points, exact_scores, correct_results, streak').order('total_points', { ascending: false })
     )
 
     const scoresMap = new Map<string, { total_points: number, exact_scores: number, correct_results: number, streak: number }>()
     for (const row of (scoresData || [])) {
-        if (!scoresMap.has(row.user_id)) {
+        const existing = scoresMap.get(row.user_id)
+        if (!existing || row.total_points > existing.total_points) {
             scoresMap.set(row.user_id, {
                 total_points: row.total_points,
                 exact_scores: row.exact_scores,
@@ -80,19 +81,14 @@ export default async function LeaderboardPage() {
         }
     })
 
-    // 6. Fetch ALL predictions for the Live Prediction Matrix
-    // This is safe for a few thousand users. It allows the client to do O(N) scoring dynamically without 
-    // requiring complex server-sent events for every goal.
-    const allPredictions = await fetchAllRows(supabase.from('predictions').select('user_id, match_id, home_score, away_score'))
-
-    // 7. Fetch DB match status so we know which matches are already officially synced
-    const { data: dbMatches } = await supabase.from('matches').select('id, status')
-    const dbMatchStatusMap = new Map<string, string>()
-    if (dbMatches) {
-        dbMatches.forEach(m => dbMatchStatusMap.set(m.id, m.status))
-    }
-
     const initials = profile?.avatar_initials ?? 'PL'
+
+    // 6. Fetch live matches and predictions for those matches to calculate live points
+    const liveMatches = await fetchAllRows(supabase.from('matches').select('*').eq('status', 'live'))
+    let livePredictions: any[] = []
+    if (liveMatches.length > 0) {
+        livePredictions = await fetchAllRows(supabase.from('predictions').select('*').in('match_id', liveMatches.map((m: any) => m.id)))
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
@@ -110,9 +106,9 @@ export default async function LeaderboardPage() {
 
                 <LeaderboardClient
                     initialLeaderboard={leaderboard}
-                    predictions={allPredictions}
+                    initialLiveMatches={liveMatches}
+                    livePredictions={livePredictions}
                     currentUserId={user?.id}
-                    dbMatchStatuses={Object.fromEntries(dbMatchStatusMap)}
                 />
             </div>
         </div>

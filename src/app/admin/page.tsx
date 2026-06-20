@@ -43,7 +43,31 @@ interface AdminPrediction {
     profile: { display_name: string; email: string } | null
 }
 
-type Tab = 'overview' | 'matches' | 'users' | 'groups' | 'predictions' | 'tools'
+interface ScoringComparison {
+    comparison_version?: string
+    generated_at?: string
+    finished_matches: number
+    users: number
+    stored_new_mismatches?: number
+    totals: { current_total: number; new_total: number; legacy_total: number }
+    rows: {
+        user_id: string
+        display_name: string
+        email: string
+        current_total: number
+        new_total: number
+        legacy_total: number
+        new_match_points?: number
+        legacy_match_points?: number
+        bracket_bonus_points?: number
+        played_matches?: number
+        selected_group_id?: string | null
+        delta_new_vs_legacy: number
+        delta_current_vs_new: number
+    }[]
+}
+
+type Tab = 'overview' | 'matches' | 'users' | 'groups' | 'predictions' | 'scoring' | 'tools'
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -131,6 +155,7 @@ export default function AdminPage() {
         { key: 'users', label: 'Users', icon: '👥' },
         { key: 'groups', label: 'Groups', icon: '🏆' },
         { key: 'predictions', label: 'Predictions', icon: '🎯' },
+        { key: 'scoring', label: 'Scoring', icon: '#' },
         { key: 'tools', label: 'Test Tools', icon: '🔧' },
     ]
 
@@ -179,6 +204,7 @@ export default function AdminPage() {
                 {tab === 'users' && <UsersTab />}
                 {tab === 'groups' && <GroupsTab />}
                 {tab === 'predictions' && <PredictionsTab />}
+                {tab === 'scoring' && <ScoringTab />}
                 {tab === 'tools' && <ToolsTab />}
             </div>
         </div>
@@ -846,6 +872,132 @@ function PredictionsTab() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TAB: Scoring
+// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+
+function ScoringTab() {
+    const [comparison, setComparison] = useState<ScoringComparison | null>(null)
+    const [loadingComparison, setLoadingComparison] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const loadScoringComparison = async () => {
+        setLoadingComparison(true)
+        setError(null)
+
+        const res = await fetch('/api/admin/scoring-comparison', { cache: 'no-store' })
+        const data = await res.json()
+
+        if (res.ok) {
+            setComparison(data)
+        } else {
+            setError(data.error ?? 'Could not load scoring comparison')
+        }
+
+        setLoadingComparison(false)
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ ...card, padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                    <div>
+                        <h3 style={{ fontFamily: 'Bebas Neue', fontSize: 30, color: 'var(--blue-accent)', lineHeight: 1 }}>Scoring System Comparison</h3>
+                        <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                            Compare current proximity points against the previous scoring formula for every user.
+                        </p>
+                    </div>
+                    <button onClick={loadScoringComparison} disabled={loadingComparison} style={{ ...btnGold, opacity: loadingComparison ? 0.6 : 1 }}>
+                        {loadingComparison ? 'Loading...' : 'Load Comparison'}
+                    </button>
+                </div>
+
+                {error && (
+                    <div style={{ marginBottom: 14, padding: 12, borderRadius: 8, border: '1px solid rgba(224,92,74,0.3)', background: 'rgba(224,92,74,0.1)', color: '#e05c4a', fontSize: 13 }}>
+                        {error}
+                    </div>
+                )}
+
+                {!comparison && !error && (
+                    <div style={{ padding: 18, borderRadius: 10, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)', fontSize: 13 }}>
+                        Click Load Comparison to calculate old vs new points from finished matches.
+                    </div>
+                )}
+
+                {comparison && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ padding: 12, borderRadius: 10, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.22)', color: 'var(--dim)', fontSize: 12 }}>
+                            Comparison version: <span style={{ color: 'var(--cream)', fontFamily: 'DM Mono, monospace' }}>{comparison.comparison_version ?? 'unknown'}</span>
+                            {comparison.generated_at && (
+                                <span> · Generated: <span style={{ color: 'var(--cream)', fontFamily: 'DM Mono, monospace' }}>{new Date(comparison.generated_at).toLocaleString()}</span></span>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+                            {[
+                                { label: 'Finished matches', value: comparison.finished_matches },
+                                { label: 'Current stored', value: comparison.totals.current_total },
+                                { label: 'New formula', value: comparison.totals.new_total },
+                                { label: 'Old formula', value: comparison.totals.legacy_total },
+                                { label: 'Stored mismatches', value: comparison.stored_new_mismatches ?? 0 },
+                            ].map(item => (
+                                <div key={item.label} style={{ padding: 12, borderRadius: 10, background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{item.label}</div>
+                                    <div style={{ fontFamily: 'Bebas Neue', fontSize: 28, color: 'var(--cream)', lineHeight: 1.1 }}>{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ maxHeight: 520, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={th}>Player</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Current stored</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>New formula</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Old formula</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Bonus</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Current - New</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>New - Old</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {comparison.rows.map(row => (
+                                        <tr key={row.user_id}>
+                                            <td style={td}>
+                                                <span style={{ color: 'var(--cream)', fontWeight: 600 }}>{row.display_name}</span>
+                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{row.email}</div>
+                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                                                    {row.played_matches ?? 0} scored matches{row.selected_group_id ? ` · group ${String(row.selected_group_id).slice(0, 8)}` : ''}
+                                                </div>
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{row.current_total}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>
+                                                {row.new_total}
+                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>match {row.new_match_points ?? row.new_total}</div>
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>
+                                                {row.legacy_total}
+                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>match {row.legacy_match_points ?? row.legacy_total}</div>
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{row.bracket_bonus_points ?? 0}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: row.delta_current_vs_new === 0 ? 'var(--green-bright)' : '#e05c4a' }}>
+                                                {row.delta_current_vs_new > 0 ? '+' : ''}{row.delta_current_vs_new}
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: row.delta_new_vs_legacy >= 0 ? 'var(--green-bright)' : '#e05c4a' }}>
+                                                {row.delta_new_vs_legacy > 0 ? '+' : ''}{row.delta_new_vs_legacy}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // TAB: Test Tools
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -854,6 +1006,8 @@ function ToolsTab() {
     const [simulating, setSimulating] = useState(false)
     const [resetting, setResetting] = useState(false)
     const [matchCount, setMatchCount] = useState('3')
+    const [comparison, setComparison] = useState<ScoringComparison | null>(null)
+    const [loadingComparison, setLoadingComparison] = useState(false)
 
     const simulate = async () => {
         setSimulating(true)
@@ -892,6 +1046,20 @@ function ToolsTab() {
             ...prev,
         ])
         setResetting(false)
+    }
+
+    const loadScoringComparison = async () => {
+        setLoadingComparison(true)
+        setLog(prev => ['Loading scoring system comparison...', ...prev])
+        const res = await fetch('/api/admin/scoring-comparison')
+        const data = await res.json()
+        if (res.ok) {
+            setComparison(data)
+            setLog(prev => [`Loaded comparison for ${data.users} users and ${data.finished_matches} finished matches`, ...prev])
+        } else {
+            setLog(prev => [`Error: ${data.error ?? 'Could not load scoring comparison'}`, ...prev])
+        }
+        setLoadingComparison(false)
     }
 
     return (
@@ -953,6 +1121,32 @@ function ToolsTab() {
                 </div>
             </div>
 
+            {/* Sync Matches with API card */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', padding: 24, marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 24 }}>🔄</span>
+                    <div>
+                        <h3 style={{ fontFamily: 'Bebas Neue', fontSize: 24, color: 'var(--gold)', lineHeight: 1 }}>Sync Matches with API</h3>
+                        <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Forcefully overwrites the Supabase matches table with the latest statuses and scores from the external live APIs.</p>
+                    </div>
+                </div>
+                <button
+                    onClick={async () => {
+                        setLog(prev => ['🔄 Syncing matches with external API...', ...prev])
+                        const res = await fetch('/api/admin/sync-all-matches', { method: 'POST' })
+                        const data = await res.json()
+                        setLog(prev => [
+                            res.ok ? `✅ Done! ${data.updatedCount} matches updated.` : `❌ Error: ${data.error}`,
+                            ...(data.updatedMatches ?? []).map((m: string) => `   ${m}`),
+                            ...prev
+                        ])
+                    }}
+                    style={{ padding: '12px 0', borderRadius: 8, background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', width: '100%' }}
+                >
+                    🌐 Run Sync Matches
+                </button>
+            </div>
+
             {/* Bracket Bonus Recalculation card */}
             <div style={{ ...card, padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -979,6 +1173,70 @@ function ToolsTab() {
                 >
                     🔢 Run Bracket Bonus Calculation
                 </button>
+            </div>
+
+            {/* Admin-only scoring comparison card */}
+            <div style={{ ...card, padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 24 }}>#</span>
+                        <div>
+                            <h3 style={{ fontFamily: 'Bebas Neue', fontSize: 24, color: 'var(--blue-accent)', lineHeight: 1 }}>Scoring System Comparison</h3>
+                            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Admin-only view comparing current proximity scoring with the previous formula.</p>
+                        </div>
+                    </div>
+                    <button onClick={loadScoringComparison} disabled={loadingComparison} style={{ ...btnGold, opacity: loadingComparison ? 0.6 : 1 }}>
+                        {loadingComparison ? 'Loading...' : 'Compare Systems'}
+                    </button>
+                </div>
+
+                {comparison && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                            {[
+                                { label: 'Finished matches', value: comparison.finished_matches },
+                                { label: 'New total', value: comparison.totals.new_total },
+                                { label: 'Legacy total', value: comparison.totals.legacy_total },
+                                { label: 'Delta', value: comparison.totals.new_total - comparison.totals.legacy_total },
+                            ].map(item => (
+                                <div key={item.label} style={{ padding: 12, borderRadius: 10, background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{item.label}</div>
+                                    <div style={{ fontFamily: 'Bebas Neue', fontSize: 28, color: 'var(--cream)', lineHeight: 1.1 }}>{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={th}>Player</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Current</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>New</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>Old</th>
+                                        <th style={{ ...th, textAlign: 'right' }}>New - Old</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {comparison.rows.slice(0, 20).map(row => (
+                                        <tr key={row.user_id}>
+                                            <td style={td}>
+                                                <span style={{ color: 'var(--cream)', fontWeight: 600 }}>{row.display_name}</span>
+                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{row.email}</div>
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{row.current_total}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>{row.new_total}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{row.legacy_total}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: row.delta_new_vs_legacy >= 0 ? 'var(--green-bright)' : '#e05c4a' }}>
+                                                {row.delta_new_vs_legacy > 0 ? '+' : ''}{row.delta_new_vs_legacy}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
 
 

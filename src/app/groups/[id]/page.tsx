@@ -5,7 +5,6 @@ import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase/client'
 import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
-import { scoreMatch } from '@/lib/scoring'
 
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
@@ -64,11 +63,6 @@ export default function GroupDetailPage() {
     const [initials, setInitials] = useState('PL')
     const [loading, setLoading] = useState(true)
     const [leaving, setLeaving] = useState(false)
-    
-    // Live points states
-    const [predictions, setPredictions] = useState<any[]>([])
-    const [dbMatchStatuses, setDbMatchStatuses] = useState<Record<string, string>>({})
-    const [liveMatches, setLiveMatches] = useState<any[]>([])
 
     const load = useCallback(async (_uid: string) => {
         // Group info
@@ -112,27 +106,6 @@ export default function GroupDetailPage() {
         merged.sort((a, b) => b.total_points - a.total_points)
         setScores(merged)
 
-        // Fetch predictions for these members for live points
-        const memberIds = members.map(m => m.user_id)
-        if (memberIds.length > 0) {
-            // Batch this safely just in case
-            const preds: any[] = []
-            for (let i = 0; i < memberIds.length; i += 100) {
-                const batch = memberIds.slice(i, i + 100)
-                const { data } = await supabase
-                    .from('predictions')
-                    .select('user_id, match_id, home_score, away_score')
-                    .in('user_id', batch)
-                if (data) preds.push(...data)
-            }
-            setPredictions(preds)
-        }
-
-        // Fetch DB match status
-        const { data: dbM } = await supabase.from('matches').select('id, status')
-        const statusMap: Record<string, string> = {}
-        dbM?.forEach(m => statusMap[m.id] = m.status)
-        setDbMatchStatuses(statusMap)
     }, [id, supabase, router])
 
     useEffect(() => {
@@ -152,21 +125,7 @@ export default function GroupDetailPage() {
         init()
     }, [load, router])
 
-    // Poll live matches every 60s
-    useEffect(() => {
-        const fetchLive = async () => {
-            try {
-                const res = await fetch('/api/matches/live', { cache: 'no-store' })
-                if (res.ok) {
-                    const data = await res.json()
-                    setLiveMatches(data.matches || [])
-                }
-            } catch { }
-        }
-        fetchLive()
-        const int = setInterval(fetchLive, 60_000)
-        return () => clearInterval(int)
-    }, [])
+    // Polling external API removed in favor of Database-Driven Architecture
 
     // Real-time scores subscription
     useEffect(() => {
@@ -195,68 +154,15 @@ export default function GroupDetailPage() {
 
     // Calculate dynamic scores with live points
     const dynamicScores = useMemo(() => {
-        const activeLiveMatches = liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED')
-        
-        const activeMatchesWithDbId = activeLiveMatches.map(lm => {
-            const dbMatch = ALL_MATCHES.find(m => m.home_team === lm.homeTeam.tla && m.away_team === lm.awayTeam.tla)
-            return {
-                ...lm,
-                dbId: dbMatch?.id,
-                isKo: dbMatch ? ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label) : false
-            }
-        }).filter(m => m.dbId)
-
-        return scores.map(user => {
-            let activeLiveBonus = 0
-            let pendingFinishedBonus = 0
-            let dynamicStreak = user.streak
-            let dynamicExact = user.exact_scores
-            let dynamicCorrect = user.correct_results
-
-            const unsyncedFinished = activeMatchesWithDbId.filter(lm => lm.status === 'FINISHED' && dbMatchStatuses[lm.dbId] !== 'finished')
-            unsyncedFinished.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-
-            for (const lm of unsyncedFinished) {
-                const pred = predictions.find(p => p.user_id === user.user_id && p.match_id === lm.dbId)
-                if (pred && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
-                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
-                    if (res.type === 'exact') dynamicExact++
-                    if (['correct', 'goal_diff'].includes(res.type)) dynamicCorrect++
-                    if (['exact', 'correct', 'goal_diff'].includes(res.type)) {
-                        dynamicStreak++
-                    } else {
-                        dynamicStreak = 0
-                    }
-                } else {
-                    // Missed prediction — break streak
-                    dynamicStreak = 0
-                }
-            }
-
-            for (const lm of activeMatchesWithDbId) {
-                const pred = predictions.find(p => p.user_id === user.user_id && p.match_id === lm.dbId)
-                const isSyncedToDb = dbMatchStatuses[lm.dbId] === 'finished'
-                if (pred && !isSyncedToDb && lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
-                    const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, lm.isKo)
-                    
-                    if (lm.status === 'FINISHED') {
-                        pendingFinishedBonus += res.total
-                    } else {
-                        activeLiveBonus += res.total
-                    }
-                }
-            }
-
-            return {
-                ...user,
-                display_points: user.total_points + activeLiveBonus + pendingFinishedBonus,
-                live_bonus: activeLiveBonus,
-                dynamic_streak: dynamicStreak,
-                dynamic_exact: dynamicExact,
-                dynamic_correct: dynamicCorrect
-            }
-        }).sort((a, b) => (b.display_points || 0) - (a.display_points || 0))
-    }, [scores, liveMatches, predictions, dbMatchStatuses])
+        return scores.map(user => ({
+            ...user,
+            display_points: user.total_points,
+            live_bonus: 0,
+            dynamic_streak: user.streak,
+            dynamic_exact: user.exact_scores,
+            dynamic_correct: user.correct_results
+        })).sort((a, b) => (b.display_points || 0) - (a.display_points || 0))
+    }, [scores])
 
     if (loading) {
         return (

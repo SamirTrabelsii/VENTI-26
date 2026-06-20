@@ -69,15 +69,16 @@ export default async function DashboardPage() {
             myScore = scores.find(s => s.user_id === user.id) ?? null
         }
 
-        // Fetch the user's global score (any group row works since total_points is the same)
+        // Fetch the user's global score — take MAX across all group rows
+        // (after recalculation they should all be equal, but this is defensive)
         if (!myScore) {
-            const { data: globalScore } = await supabase
+            const { data: allUserScores } = await supabase
                 .from('scores')
                 .select('*')
                 .eq('user_id', user.id)
+                .order('total_points', { ascending: false })
                 .limit(1)
-                .single()
-            if (globalScore) myScore = globalScore
+            if (allUserScores && allUserScores.length > 0) myScore = allUserScores[0]
         }
     }
 

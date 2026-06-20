@@ -119,19 +119,19 @@ export default function GroupsPage() {
                     .select('*', { count: 'exact', head: true })
                     .eq('group_id', g.id)
 
-                // Scores for leaderboard preview
+                // Fetch ALL scores for this group (not limited) so rank is accurate
                 const { data: scores } = await supabase
                     .from('scores')
                     .select('user_id, total_points, profile:profiles(display_name)')
                     .eq('group_id', g.id)
                     .order('total_points', { ascending: false })
-                    .limit(5)
 
-                const myScoreRow = scores?.find(s => s.user_id === uid)
-                const myRank = scores
-                    ? scores.findIndex(s => s.user_id === uid) + 1
+                const allScores = scores ?? []
+                const myScoreRow = allScores.find(s => s.user_id === uid)
+                const myRank = myScoreRow
+                    ? allScores.findIndex(s => s.user_id === uid) + 1
                     : null
-                const leader = scores?.[0]
+                const leader = allScores[0]
                 const leaderProfile = Array.isArray(leader?.profile) ? leader.profile[0] : leader?.profile
 
                 // Members preview for avatars

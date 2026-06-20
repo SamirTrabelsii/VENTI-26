@@ -5,6 +5,7 @@ import { GROUP_MATCHES, KNOCKOUT_MATCHES, getTeam, getAdjustedKickoff } from '@/
 import MatchModal, { MatchData as ModalMatchData } from '@/components/MatchModal'
 import TeamFlag from '@/components/TeamFlag'
 import { scoreMatch } from '@/lib/scoring'
+import { createClient } from '@/lib/supabase/client'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
@@ -35,63 +36,44 @@ function formatPlaceholder(code: string): string {
 
 interface FixturesClientProps {
     predictions: Array<{ match_id: string; home_score: number; away_score: number }>
-    dbMatches: Array<{ id: string; status: string; home_score: number | null; away_score: number | null }>
-    apiMatches?: any[]
+    dbMatches: Array<{ id: string; status: string; home_score: number | null; away_score: number | null; kickoff?: string }>
 }
 
-export default function FixturesClient({ predictions, dbMatches, apiMatches = [] }: FixturesClientProps) {
+export default function FixturesClient({ predictions, dbMatches }: FixturesClientProps) {
     const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
     const [filter, setFilter] = useState<'all' | 'group' | 'knockout'>('all')
-    const [liveMatches, setLiveMatches] = useState<any[]>([])
+    const [currentDbMatches, setCurrentDbMatches] = useState(dbMatches)
 
-    // Fetch real-time live matches
     useEffect(() => {
-        const fetchLive = async () => {
-            try {
-                const res = await fetch('/api/matches/live', { cache: 'no-store' })
-                if (res.ok) {
-                    const data = await res.json()
-                    setLiveMatches(data.matches || [])
-                }
-            } catch { }
-        }
-        fetchLive()
-        const int = setInterval(fetchLive, 60_000)
-        return () => clearInterval(int)
+        setCurrentDbMatches(dbMatches)
+    }, [dbMatches])
+
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase.channel('fixtures_matches')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+                setCurrentDbMatches(prev => prev.map(m => m.id === payload.new.id ? payload.new as any : m))
+            })
+            .subscribe()
+
+        return () => { supabase.removeChannel(channel) }
     }, [])
 
-    // Combine static matches with API live statuses
+    // Combine static matches
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
-            const dbMatch = dbMatches.find(d => d.id === m.id)
-            // Match by home + away team code (works for both football-data.org and worldcup26.ir responses)
-            const liveMatch = liveMatches.find(l =>
-                (l._homeCode === m.home_team && l._awayCode === m.away_team) ||
-                (l.homeTeam?.tla === m.home_team && l.awayTeam?.tla === m.away_team)
-            )
-
-            let status = dbMatch?.status ?? 'upcoming'
-            let homeScore = dbMatch?.home_score ?? null
-            let awayScore = dbMatch?.away_score ?? null
-
-            if (liveMatch && liveMatch.status !== 'SCHEDULED') {
-                if (liveMatch.status === 'IN_PLAY' || liveMatch.status === 'PAUSED') status = 'live'
-                else if (liveMatch.status === 'FINISHED') status = 'finished'
-
-                homeScore = liveMatch.score?.fullTime?.home ?? homeScore
-                awayScore = liveMatch.score?.fullTime?.away ?? awayScore
-            }
+            const dbMatch = currentDbMatches.find(d => d.id === m.id)
 
             return {
                 ...m,
-                kickoff: liveMatch?.utcDate || m.kickoff,
-                dbStatus: status,
-                actualHomeScore: homeScore,
-                actualAwayScore: awayScore,
+                kickoff: dbMatch?.kickoff ?? m.kickoff,
+                dbStatus: dbMatch?.status ?? 'upcoming',
+                actualHomeScore: dbMatch?.home_score ?? null,
+                actualAwayScore: dbMatch?.away_score ?? null,
                 isKnockoutMatch: isKnockout(m.group_label),
             }
         })
-    }, [dbMatches, liveMatches])
+    }, [currentDbMatches])
 
     // Filter
     const filteredMatches = useMemo(() => {
