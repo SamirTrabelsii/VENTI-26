@@ -30,11 +30,11 @@ type Slide = {
 const STORAGE_PREFIX = 'venti26:whats-new'
 const SCORING_LADDER = [
     { error: '0', points: '+15', label: 'Perfect' },
-    { error: '1', points: '+10', label: 'Very close' },
-    { error: '2', points: '+6', label: 'Close' },
-    { error: '3', points: '+3', label: 'Near' },
-    { error: '4', points: '+1', label: 'Small reward' },
-    { error: '5+', points: '+0', label: 'No proximity' }
+    { error: '1', points: '+5', label: 'Small Miss' },
+    { error: '2', points: '+0', label: 'Close' },
+    { error: '3', points: '-5', label: 'Penalty' },
+    { error: '4', points: '-8', label: 'Huge Miss' },
+    { error: '5+', points: '-10', label: 'Wiped' }
 ]
 
 export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
@@ -47,8 +47,8 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const slides = useMemo<Slide[]>(() => [
         {
             title: 'New scoring system',
-            body: 'Predictions now reward both the match result and how close your score was.',
-            note: 'Example: actual 3-1, prediction 3-0 = correct outcome +10 and 1 goal error +10, so 20 points.',
+            body: 'Predictions heavily reward exact scores and severely penalize large errors. A wrong outcome gives max 7 mercy points.',
+            note: 'Example: actual 2-1, prediction 3-1 = Correct Outcome (+10) and 1 goal error (+5) = 15 points. But an Exact Score gives 25 points! (Note: Knockouts still award +10 for correct qualifier).',
             Icon: Target,
             accent: '#D4A843',
             variant: 'scoring'
@@ -266,7 +266,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                                 <div className="grid place-items-center text-zinc-500">+</div>
                                                 <div className="border border-[#D4A843]/30 bg-[#D4A843]/10 p-3 text-center">
                                                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Proximity</p>
-                                                    <p className="mt-1 font-display text-2xl uppercase text-[#D4A843]">0-15</p>
+                                                    <p className="mt-1 font-display text-2xl uppercase text-[#D4A843]">-10/+15</p>
                                                 </div>
                                                 <div className="grid place-items-center text-zinc-500">=</div>
                                                 <div className="border border-white/10 bg-white/[0.04] p-3 text-center">

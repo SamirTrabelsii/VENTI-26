@@ -106,8 +106,9 @@ const FAQ_ITEMS: FAQItem[] = [
                 <tbody>
                     {[
                         { rule: 'Exact scoreline (e.g. 2-1 → 2-1)', pts: '+25', color: 'var(--gold)' },
-                        { rule: 'Correct outcome (right winner or draw)', pts: '+10', color: 'var(--cream)' },
-                        { rule: 'Score proximity: total error 0 / 1 / 2 / 3 / 4 / 5+', pts: '+15 / +10 / +6 / +3 / +1 / +0', color: 'var(--gold)' },
+                        { rule: 'Correct outcome (total points by error: 1 / 2 / 3 / 4 / 5+)', pts: '15 / 10 / 5 / 2 / 0', color: 'var(--cream)' },
+                        { rule: 'Goal / No-Goal Bonus (BTTS correct, applies to non-exact scores)', pts: '+1', color: '#5b9fff' },
+                        { rule: 'Wrong outcome mercy (total points by error: 1 / 2 / 3+)', pts: '5 / 2 / 0', color: 'var(--dim)' },
                         { rule: 'Exact scoreline maximum', pts: '+25', color: 'var(--gold)' },
                         { rule: 'Correct qualifier after penalties (knockout draw)', pts: '+10', color: '#e05c4a' },
                     ].map(row => (
