@@ -78,6 +78,11 @@ function ProfileContent() {
             // Fetch Bracket Picks
             const { data: bracketPicks } = await supabase.from('bracket_picks').select('*').eq('user_id', targetUserId)
             
+            // Fetch Bracket Bonus Points
+            const { data: scoreRow } = await supabase.from('scores').select('bracket_bonus_points').eq('user_id', targetUserId).limit(1).single()
+            const bracketBonus = scoreRow?.bracket_bonus_points || 0
+
+            
             const groupPreds = predictions?.length ?? 0
             const bracketPreds = bracketPicks?.length ?? 0
             setPredCount(groupPreds + bracketPreds)
@@ -124,16 +129,27 @@ function ProfileContent() {
                     if (lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
                         if (pred && typeof pred.home_score === 'number') {
                             const isKnockout = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(staticMatch.group_label)
-                            const res = scoreMatch(pred.home_score, pred.away_score, lm.score.fullTime.home, lm.score.fullTime.away, isKnockout, {
+                            
+                            const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
+                            const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
+                            
+                            const isFixtureCorrect = !isKnockout ||
+                                !pred.predicted_home_team ||
+                                !pred.predicted_away_team ||
+                                (pred.predicted_home_team === lm.homeTeam.tla && pred.predicted_away_team === lm.awayTeam.tla);
+
+                            const res = scoreMatch(effPredHome, effPredAway, lm.score.fullTime.home, lm.score.fullTime.away, isKnockout, {
                                 predQualifier: pred.qualifier,
-                                isRepredicted: pred.is_repredicted
+                                isRepredicted: pred.is_repredicted,
+                                isFixtureCorrect,
+                                multiplier: 1 // Live matches via API don't have DB multipliers easily accessible here unless fetched
                             })
                             hist.push({
                                 ...staticMatch,
                                 real_home_score: lm.score.fullTime.home,
                                 real_away_score: lm.score.fullTime.away,
-                                pred_home_score: pred.home_score,
-                                pred_away_score: pred.away_score,
+                                pred_home_score: effPredHome,
+                                pred_away_score: effPredAway,
                                 points: res.total,
                                 type: res.type,
                                 status: lm.status
@@ -163,18 +179,27 @@ function ProfileContent() {
                         if (typeof dbm.home_score === 'number') {
                             if (pred && typeof pred.home_score === 'number') {
                                 const isKnockout = dbm.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(dbm.stage) : false
-                                const res = scoreMatch(pred.home_score, pred.away_score, dbm.home_score, dbm.away_score, isKnockout, {
+                                const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
+                                const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
+                                
+                                const isFixtureCorrect = !isKnockout ||
+                                    !pred.predicted_home_team ||
+                                    !pred.predicted_away_team ||
+                                    (pred.predicted_home_team === dbm.home_team && pred.predicted_away_team === dbm.away_team);
+
+                                const res = scoreMatch(effPredHome, effPredAway, dbm.home_score, dbm.away_score, isKnockout, {
                                     predQualifier: pred.qualifier,
                                     realQualifier: dbm.qualifier,
-                                    isRepredicted: pred.is_repredicted,
-                                    multiplier: dbm.multiplier ?? 1
+                                    isRepredicted: !!pred.is_repredicted,
+                                    multiplier: dbm.multiplier ?? 1,
+                                    isFixtureCorrect
                                 })
                                 hist.push({
                                     ...staticMatch,
                                     real_home_score: dbm.home_score,
                                     real_away_score: dbm.away_score,
-                                    pred_home_score: pred.home_score,
-                                    pred_away_score: pred.away_score,
+                                    pred_home_score: effPredHome,
+                                    pred_away_score: effPredAway,
                                     points: res.total,
                                     type: res.type,
                                     status: dbm.status
@@ -201,7 +226,7 @@ function ProfileContent() {
             setHistoryMatches(hist)
 
             // Derive KPIs dynamically from match history (single source of truth)
-            let dynTotal = 0
+            let dynTotal = bracketBonus
             let dynExact = 0
             let dynCorrect = 0
             let dynCurrentStreak = 0

@@ -84,7 +84,14 @@ export default async function LeaderboardPage() {
     const initials = profile?.avatar_initials ?? 'PL'
 
     // 6. Fetch live matches and predictions for those matches to calculate live points
-    const liveMatches = await fetchAllRows(supabase.from('matches').select('*').eq('status', 'live'))
+    const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    const liveMatches = await fetchAllRows(
+        supabase.from('matches')
+            .select('*')
+            .neq('status', 'finished')
+            .lte('kickoff', twoHoursFromNow)
+    )
+
     let livePredictions: any[] = []
     if (liveMatches.length > 0) {
         livePredictions = await fetchAllRows(supabase.from('predictions').select('*').in('match_id', liveMatches.map((m: any) => m.id)))

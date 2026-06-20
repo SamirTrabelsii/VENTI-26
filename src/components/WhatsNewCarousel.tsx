@@ -47,7 +47,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const slides = useMemo<Slide[]>(() => [
         {
             title: 'New Scoring System',
-            body: 'Points are based on your Total Goal Error. Perfect scores earn max points, while large errors wipe them. Plus a new Goal/No-Goal Bonus (+1 pt)!',
+            body: 'A precise scoring model based on Goal Difference Error. Earn up to 15 points for perfect predictions.',
             note: '',
             Icon: Target,
             accent: '#D4A843',
@@ -244,16 +244,19 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -18 }}
                                     transition={{ duration: 0.2 }}
-                                    className="max-h-[55vh] overflow-y-auto pr-1 md:max-h-[65vh]"
+                                    className="max-h-[60vh] overflow-y-auto pr-1 md:max-h-[65vh]"
                                     style={{ scrollbarWidth: 'thin' }}
                                 >
-                                    <div className="mb-5 grid h-16 w-16 place-items-center border bg-black/45" style={{ borderColor: `${slide.accent}88` }}>
-                                        <Icon size={30} style={{ color: slide.accent }} />
+                                    <div className="mb-4 flex items-center gap-3">
+                                        <div className="grid h-12 w-12 place-items-center border bg-black/45" style={{ borderColor: `${slide.accent}88` }}>
+                                            <Icon size={24} style={{ color: slide.accent }} />
+                                        </div>
+                                        <h2 id="whats-new-title" className="font-display text-2xl uppercase leading-tight tracking-wide text-white md:text-3xl">
+                                            {slide.title}
+                                        </h2>
                                     </div>
 
-                                    <h2 id="whats-new-title" className="font-display text-3xl uppercase leading-tight tracking-wide text-white md:text-4xl">
-                                        {slide.title}
-                                    </h2>
+
                                     {slide.variant !== 'scoring' && (
                                         <p className="mt-4 text-base leading-7 text-zinc-300">
                                             {slide.body}
@@ -273,43 +276,33 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                             </div>
 
                                             <div className="border border-white/10 bg-white/[0.04] p-3">
-                                                <div className="mb-3 flex items-center gap-2">
+                                                <div className="mb-2 flex items-center justify-center gap-2">
                                                     <Target size={14} className="text-[#D4A843]" />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Example Scenario</span>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Example</span>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-center">
-                                                    <div className="flex-1 bg-black/50 border border-[#D4A843]/30 p-2 rounded">
-                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-widest">Actual</span>
-                                                        <span className="block text-xl font-display text-white mt-1">2 - 1</span>
-                                                    </div>
-                                                    <div className="text-zinc-600 font-black text-[10px] uppercase">VS</div>
+                                                
+                                                <div className="flex items-center justify-between text-center gap-2">
                                                     <div className="flex-1 bg-black/50 border border-white/10 p-2 rounded">
                                                         <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-widest">Prediction</span>
                                                         <span className="block text-xl font-display text-white mt-1">3 - 1</span>
                                                     </div>
+                                                    <div className="text-zinc-600 font-black text-[10px] uppercase">VS</div>
+                                                    <div className="flex-1 bg-black/50 border border-[#D4A843]/30 p-2 rounded">
+                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-widest">Actual</span>
+                                                        <span className="block text-xl font-display text-white mt-1">2 - 1</span>
+                                                    </div>
                                                 </div>
                                                 
-                                                <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-                                                    <div className="text-left">
-                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">Outcome</span>
-                                                        <span className="block text-sm font-display text-[#D4A843]">+10</span>
+                                                <div className="mt-3 bg-black/30 p-2 border border-white/5 rounded flex justify-between items-center">
+                                                    <div className="flex flex-col text-left">
+                                                        <span className="text-[10px] text-zinc-400 font-bold">1 Goal Error</span>
+                                                        <span className="text-sm font-display text-[#D4A843]">+5 pts</span>
                                                     </div>
-                                                    <div className="text-center">
-                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">1 Goal Error</span>
-                                                        <span className="block text-sm font-display text-[#D4A843]">+5</span>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-wider">Total</span>
-                                                        <span className="block text-sm font-display text-[#D4A843]">15 pts</span>
+                                                    <div className="flex flex-col text-right">
+                                                        <span className="text-[10px] text-zinc-400 font-bold">Outcome</span>
+                                                        <span className="text-sm font-display text-[#D4A843]">+10 pts</span>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="flex items-start gap-3 border border-[#D4A843]/20 bg-[#D4A843]/5 p-3 rounded">
-                                                <Sparkles size={14} className="mt-0.5 shrink-0 text-[#D4A843]" />
-                                                <p className="text-xs leading-5 text-zinc-300">
-                                                    <strong className="text-[#D4A843]">Goal/No-Goal Bonus:</strong> Earn <strong className="text-white">+1 pt</strong> for correctly predicting if both teams will score (e.g. 1-1) or if at least one team keeps a clean sheet (e.g. 2-0).
-                                                </p>
                                             </div>
                                         </div>
                                     ) : (

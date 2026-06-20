@@ -79,7 +79,9 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
             const dbMatch = currentDbMatches.find(d => d.id === m.id)
-            const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === m.home_team && l.awayTeam.tla === m.away_team)
+            const effHome = dbMatch?.home_team ?? m.home_team;
+            const effAway = dbMatch?.away_team ?? m.away_team;
+            const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === effHome && l.awayTeam.tla === effAway)
 
             let status = dbMatch?.status ?? 'upcoming'
             let hScore = dbMatch?.home_score ?? null
@@ -99,6 +101,8 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
 
             return {
                 ...m,
+                home_team: dbMatch?.home_team ?? m.home_team,
+                away_team: dbMatch?.away_team ?? m.away_team,
                 kickoff: dbMatch?.kickoff ?? m.kickoff,
                 dbStatus: status,
                 actualHomeScore: hScore,
@@ -213,7 +217,21 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
         const prediction = predictions.find(p => p.match_id === m.id)
         let provisionalPoints: number | null = null
         if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
-            const res = scoreMatch(prediction.home_score, prediction.away_score, m.actualHomeScore, m.actualAwayScore, ko)
+            const effPredHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number' ? prediction.original_home_score : prediction.home_score;
+            const effPredAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number' ? prediction.original_away_score : prediction.away_score;
+            
+            const isFixtureCorrect = !ko ||
+                !prediction.predicted_home_team ||
+                !prediction.predicted_away_team ||
+                (prediction.predicted_home_team === m.home_team && prediction.predicted_away_team === m.away_team);
+
+            const res = scoreMatch(effPredHome, effPredAway, m.actualHomeScore, m.actualAwayScore, ko, {
+                predQualifier: prediction.qualifier || prediction.qualifier_pick || prediction.team_code,
+                realQualifier: m.qualifier || null,
+                isRepredicted: !!prediction.is_repredicted,
+                multiplier: m.multiplier || 1,
+                isFixtureCorrect
+            })
             provisionalPoints = res.total
         }
 
