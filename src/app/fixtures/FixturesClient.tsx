@@ -290,36 +290,54 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                     )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+                    {/* Home Team */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                         {homeTeam ? (
-                            <TeamFlag teamCode={m.home_team} size={24} />
+                            <div style={{ position: 'relative' }}>
+                                <div style={{ position: 'absolute', inset: -8, background: 'var(--gold)', filter: 'blur(16px)', opacity: 0.03, borderRadius: '50%' }} />
+                                <TeamFlag teamCode={m.home_team} size={42} />
+                            </div>
                         ) : (
-                            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
+                            <span style={{ fontSize: 28, width: 42, textAlign: 'center' }}>🏳️</span>
                         )}
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', lineHeight: 1.2 }}>
                             {homeTeam?.name ?? formatPlaceholder(m.home_team)}
                         </span>
                     </div>
-                    <span style={{ fontSize: 24, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
-                        {(isLive || isFinished) ? m.actualHomeScore : '—'}
-                    </span>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {/* Score / Status Center */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 8px' }}>
+                        <div style={{ 
+                            background: isLive ? 'rgba(200,57,43,0.1)' : 'rgba(255,255,255,0.02)', 
+                            border: `1px solid ${isLive ? 'rgba(200,57,43,0.3)' : 'var(--border)'}`, 
+                            borderRadius: 12, padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 14,
+                            boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
+                        }}>
+                            <span style={{ fontSize: 32, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)', width: 24, textAlign: 'center' }}>
+                                {(isLive || isFinished) ? m.actualHomeScore : '-'}
+                            </span>
+                            <span style={{ fontSize: 14, color: 'var(--muted)', opacity: 0.5 }}>:</span>
+                            <span style={{ fontSize: 32, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)', width: 24, textAlign: 'center' }}>
+                                {(isLive || isFinished) ? m.actualAwayScore : '-'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Away Team */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                         {awayTeam ? (
-                            <TeamFlag teamCode={m.away_team} size={24} />
+                            <div style={{ position: 'relative' }}>
+                                <div style={{ position: 'absolute', inset: -8, background: 'var(--gold)', filter: 'blur(16px)', opacity: 0.03, borderRadius: '50%' }} />
+                                <TeamFlag teamCode={m.away_team} size={42} />
+                            </div>
                         ) : (
-                            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
+                            <span style={{ fontSize: 28, width: 42, textAlign: 'center' }}>🏳️</span>
                         )}
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', lineHeight: 1.2 }}>
                             {awayTeam?.name ?? formatPlaceholder(m.away_team)}
                         </span>
                     </div>
-                    <span style={{ fontSize: 24, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
-                        {(isLive || isFinished) ? m.actualAwayScore : '—'}
-                    </span>
                 </div>
 
                 {provisionalPoints !== null && provisionalPoints > 0 && (
@@ -403,23 +421,6 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                         </button>
                     ))}
                 </div>
-
-                {/* Jump to Latest Button */}
-                <button
-                    onClick={scrollToLastPlayed}
-                    className="hover-glow"
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '10px 20px', borderRadius: 10,
-                        background: 'rgba(212,168,67,0.1)', border: '1px solid var(--gold)',
-                        color: 'var(--gold)', fontSize: 13, fontWeight: 700,
-                        cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: 1
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.color = '#000' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(212,168,67,0.1)'; e.currentTarget.style.color = 'var(--gold)' }}
-                >
-                    ↓ Last Played
-                </button>
             </div>
 
             {/* Live Matches Section */}
@@ -446,15 +447,16 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                     <div key={isoDate} id={`date-${isoDate}`}>
                         {/* Date Header */}
                         <div style={{
-                            display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16,
-                            position: 'sticky', top: 64, background: 'var(--black)', zIndex: 10,
-                            padding: '16px 0', borderBottom: '1px solid var(--border)',
+                            display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20,
+                            position: 'sticky', top: 60, background: 'rgba(10,10,10,0.75)', backdropFilter: 'blur(16px)',
+                            zIndex: 10, padding: '16px 24px', borderRadius: 16,
+                            border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
                         }}>
-                            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--cream)', textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' }}>
+                            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)', textTransform: 'uppercase', letterSpacing: 2, margin: 0 }}>
                                 {date}
                             </h2>
-                            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                            <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, var(--gold), transparent)', opacity: 0.4 }} />
+                            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)', letterSpacing: 1.5, textTransform: 'uppercase', background: 'rgba(212,168,67,0.1)', padding: '6px 12px', borderRadius: 20 }}>
                                 {matches.length} match{matches.length > 1 ? 'es' : ''}
                             </span>
                         </div>
@@ -476,6 +478,41 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                     onClose={() => setSelectedMatchId(null)}
                 />
             )}
+
+            {/* Floating Jump to Latest Button */}
+            <button
+                onClick={scrollToLastPlayed}
+                className="fixed bottom-[90px] right-4 md:bottom-8 md:right-8 z-40"
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '16px 24px', borderRadius: '32px',
+                    background: 'var(--gold)', color: '#000', 
+                    fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.5,
+                    boxShadow: '0 4px 12px rgba(212,168,67,0.15), inset 0 -3px 0 rgba(0,0,0,0.15)',
+                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    backdropFilter: 'blur(8px)',
+                }}
+                onMouseEnter={e => { 
+                    e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)'; 
+                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(212,168,67,0.25), inset 0 -3px 0 rgba(0,0,0,0.1)' 
+                }}
+                onMouseLeave={e => { 
+                    e.currentTarget.style.transform = 'translateY(0) scale(1)'; 
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(212,168,67,0.15), inset 0 -3px 0 rgba(0,0,0,0.15)' 
+                }}
+                onMouseDown={e => { 
+                    e.currentTarget.style.transform = 'translateY(2px) scale(0.98)'; 
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(212,168,67,0.2)' 
+                }}
+                onMouseUp={e => { 
+                    e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)' 
+                }}
+            >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.3s' }}>
+                    <path d="M12 5v14M19 12l-7 7-7-7"/>
+                </svg>
+                Today
+            </button>
         </div>
     )
 }
