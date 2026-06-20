@@ -198,7 +198,7 @@ export function formatPoints(pts: number): string {
 export const SCORING_REFERENCE = {
     groupAndKnockout: [
         { pts: 10, label: 'Correct outcome', note: 'Right winner or draw. Miss the outcome and this bonus is lost.' },
-        { pts: 15, label: 'Score proximity', note: 'Starts at +15 and heavily penalizes errors. Correct outcome drops: 0=15, 1=5, 2=0, 3=-5, 4=-8, 5+=-10. Wrong outcome gives mercy points: 1=5, 2=2, 3+=0.' },
+        { pts: 15, label: 'Score proximity', note: 'Starts at +15 and penalizes Total Goal Error (sum of home & away goal difference). Correct outcome drops: Error 0=+15, 1=+5, 2=0, 3=-5, 4=-8, 5+=-10. Wrong outcome mercy: Error 1=+5, 2=+2, 3+=0.' },
         { pts: 1, label: 'Goal / No-Goal Bonus', note: '+1 point for correctly predicting if both teams score (Goal/Goal) or not (No Goal). Does not apply to Exact Scores.' },
         { pts: 25, label: 'Maximum score', note: 'Exact scoreline gives +10 outcome and +15 proximity.' },
     ],

@@ -43,10 +43,26 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
     const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
     const [filter, setFilter] = useState<'all' | 'group' | 'knockout'>('all')
     const [currentDbMatches, setCurrentDbMatches] = useState(dbMatches)
+    const [liveApiMatches, setLiveApiMatches] = useState<any[]>([])
 
     useEffect(() => {
         setCurrentDbMatches(dbMatches)
     }, [dbMatches])
+
+    useEffect(() => {
+        const fetchLive = async () => {
+            try {
+                const res = await fetch('/api/matches/live', { cache: 'no-store' })
+                const data = await res.json()
+                if (data.matches) setLiveApiMatches(data.matches)
+            } catch {
+                // Ignore API failures
+            }
+        }
+        fetchLive()
+        const interval = setInterval(fetchLive, 60_000)
+        return () => clearInterval(interval)
+    }, [])
 
     useEffect(() => {
         const supabase = createClient()
@@ -63,17 +79,34 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
             const dbMatch = currentDbMatches.find(d => d.id === m.id)
+            const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === m.home_team && l.awayTeam.tla === m.away_team)
+
+            let status = dbMatch?.status ?? 'upcoming'
+            let hScore = dbMatch?.home_score ?? null
+            let aScore = dbMatch?.away_score ?? null
+
+            if (apiMatch) {
+                if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') status = 'live'
+                else if (apiMatch.status === 'FINISHED') status = 'finished'
+                
+                if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
+                    hScore = apiMatch.score.fullTime.home
+                }
+                if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
+                    aScore = apiMatch.score.fullTime.away
+                }
+            }
 
             return {
                 ...m,
                 kickoff: dbMatch?.kickoff ?? m.kickoff,
-                dbStatus: dbMatch?.status ?? 'upcoming',
-                actualHomeScore: dbMatch?.home_score ?? null,
-                actualAwayScore: dbMatch?.away_score ?? null,
+                dbStatus: status,
+                actualHomeScore: hScore,
+                actualAwayScore: aScore,
                 isKnockoutMatch: isKnockout(m.group_label),
             }
         })
-    }, [currentDbMatches])
+    }, [currentDbMatches, liveApiMatches])
 
     // Filter
     const filteredMatches = useMemo(() => {
@@ -83,7 +116,10 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
     }, [fullMatches, filter])
 
 
-    // ── Sorted date groups — array preserves chronological order ──────────────
+    // ── Sorted date groups & Live matches ──────────────────────────────────────
+    const liveMatches = useMemo(() => {
+        return filteredMatches.filter(m => m.dbStatus === 'live')
+    }, [filteredMatches])
 
     const sortedDateGroups = useMemo(() => {
         // Sort matches by kickoff timestamp first
@@ -165,6 +201,120 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
     const groupCount = fullMatches.filter(m => !m.isKnockoutMatch).length
     const koCount = fullMatches.filter(m => m.isKnockoutMatch).length
 
+    // Match Card Component
+    const MatchCard = ({ m }: { m: any }) => {
+        const homeTeam = getTeam(m.home_team)
+        const awayTeam = getTeam(m.away_team)
+        const isFinished = m.dbStatus === 'finished'
+        const isLive = m.dbStatus === 'live'
+        const ko = m.isKnockoutMatch
+        const roundLabel = ROUND_LABELS[m.group_label]
+
+        const prediction = predictions.find(p => p.match_id === m.id)
+        let provisionalPoints: number | null = null
+        if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
+            const res = scoreMatch(prediction.home_score, prediction.away_score, m.actualHomeScore, m.actualAwayScore, ko)
+            provisionalPoints = res.total
+        }
+
+        return (
+            <div
+                onClick={() => setSelectedMatchId(m.id)}
+                style={{
+                    background: isLive ? 'rgba(200,57,43,0.03)' : ko ? 'linear-gradient(135deg, var(--surface) 0%, rgba(212,168,67,0.03) 100%)' : 'var(--surface)',
+                    border: `1px solid ${isLive ? 'rgba(200,57,43,0.35)' : ko ? 'var(--border-gold)' : 'var(--border)'}`,
+                    borderRadius: 14, padding: '16px 20px',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    position: 'relative', overflow: 'hidden',
+                }}
+                onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLElement
+                    el.style.borderColor = isLive ? 'rgba(200,57,43,0.8)' : 'var(--gold)'
+                    el.style.transform = 'translateY(-2px)'
+                    el.style.boxShadow = isLive ? '0 8px 24px rgba(200,57,43,0.2)' : '0 8px 24px rgba(0,0,0,0.3)'
+                }}
+                onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLElement
+                    el.style.borderColor = isLive ? 'rgba(200,57,43,0.35)' : ko ? 'var(--border-gold)' : 'var(--border)'
+                    el.style.transform = 'translateY(0)'
+                    el.style.boxShadow = 'none'
+                }}
+            >
+                {ko && !isLive && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold))' }} />
+                )}
+                {isLive && (
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: 'linear-gradient(90deg, #e05c4a, #d4a843, #e05c4a)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 2s linear infinite',
+                    }} />
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <span style={{
+                        fontSize: 11, fontWeight: 600,
+                        color: isLive ? '#e05c4a' : ko ? 'var(--gold)' : 'var(--muted)',
+                    }}>
+                        {ko ? (roundLabel ?? m.group_label) : `Group ${m.group_label}`}
+                    </span>
+                    {isLive ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#e05c4a', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e05c4a', animation: 'pulse 1.5s ease-in-out infinite' }} /> LIVE
+                        </span>
+                    ) : isFinished ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green-bright)', letterSpacing: 1 }}>FT</span>
+                    ) : (
+                        <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                            {getAdjustedKickoff(m.kickoff).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Tunis' })} <span style={{ fontSize: 9, opacity: 0.7 }}>GMT+1</span>
+                        </span>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {homeTeam ? (
+                            <TeamFlag teamCode={m.home_team} size={24} />
+                        ) : (
+                            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
+                        )}
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
+                            {homeTeam?.name ?? formatPlaceholder(m.home_team)}
+                        </span>
+                    </div>
+                    <span style={{ fontSize: 24, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
+                        {(isLive || isFinished) ? m.actualHomeScore : '—'}
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {awayTeam ? (
+                            <TeamFlag teamCode={m.away_team} size={24} />
+                        ) : (
+                            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
+                        )}
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
+                            {awayTeam?.name ?? formatPlaceholder(m.away_team)}
+                        </span>
+                    </div>
+                    <span style={{ fontSize: 24, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
+                        {(isLive || isFinished) ? m.actualAwayScore : '—'}
+                    </span>
+                </div>
+
+                {provisionalPoints !== null && provisionalPoints > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,168,67,0.1)', padding: '4px 8px', borderRadius: 6 }}>
+                            +{provisionalPoints} pts
+                        </span>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     return (
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 40px 60px' }}>
 
@@ -206,6 +356,24 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                 ))}
             </div>
 
+            {/* Live Matches Section */}
+            {liveMatches.length > 0 && (
+                <div style={{ marginBottom: 48 }}>
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
+                        borderBottom: '1px solid rgba(200,57,43,0.3)', paddingBottom: 12
+                    }}>
+                        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#e05c4a', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                        <h2 style={{ fontFamily: 'Bebas Neue', fontSize: 32, color: '#e05c4a', letterSpacing: 1.5, margin: 0 }}>
+                            Featured Live Games
+                        </h2>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                        {liveMatches.map(m => <MatchCard key={m.id} m={m} />)}
+                    </div>
+                </div>
+            )}
+
             {/* Matches List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
                 {sortedDateGroups.map(({ date, isoDate, matches }) => (
@@ -227,120 +395,7 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
 
                         {/* Matches Grid for the Date */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-                            {matches.map(m => {
-                                const homeTeam = getTeam(m.home_team)
-                                const awayTeam = getTeam(m.away_team)
-                                const isFinished = m.dbStatus === 'finished'
-                                const isLive = m.dbStatus === 'live'
-                                const ko = m.isKnockoutMatch
-                                const roundLabel = ROUND_LABELS[m.group_label]
-
-                                const prediction = predictions.find(p => p.match_id === m.id)
-                                let provisionalPoints: number | null = null
-                                if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
-                                    const res = scoreMatch(prediction.home_score, prediction.away_score, m.actualHomeScore, m.actualAwayScore, ko)
-                                    provisionalPoints = res.total
-                                }
-
-                                return (
-                                    <div
-                                        key={m.id}
-                                        onClick={() => setSelectedMatchId(m.id)}
-                                        style={{
-                                            background: ko ? 'linear-gradient(135deg, var(--surface) 0%, rgba(212,168,67,0.03) 100%)' : 'var(--surface)',
-                                            border: `1px solid ${isLive ? 'rgba(200,57,43,0.35)' : ko ? 'var(--border-gold)' : 'var(--border)'}`,
-                                            borderRadius: 14, padding: '16px 20px',
-                                            cursor: 'pointer', transition: 'all 0.2s',
-                                            position: 'relative', overflow: 'hidden',
-                                        }}
-                                        onMouseEnter={e => {
-                                            const el = e.currentTarget as HTMLElement
-                                            el.style.borderColor = 'var(--gold)'
-                                            el.style.transform = 'translateY(-2px)'
-                                            el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'
-                                        }}
-                                        onMouseLeave={e => {
-                                            const el = e.currentTarget as HTMLElement
-                                            el.style.borderColor = isLive ? 'rgba(200,57,43,0.35)' : ko ? 'var(--border-gold)' : 'var(--border)'
-                                            el.style.transform = 'translateY(0)'
-                                            el.style.boxShadow = 'none'
-                                        }}
-                                    >
-                                        {/* Top accent for knockout */}
-                                        {ko && (
-                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold))' }} />
-                                        )}
-
-                                        {/* Status line */}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                                            <span style={{
-                                                fontSize: 11, fontWeight: 600,
-                                                color: ko ? 'var(--gold)' : 'var(--muted)',
-                                            }}>
-                                                {ko ? (roundLabel ?? m.group_label) : `Group ${m.group_label}`}
-                                            </span>
-                                            {isLive ? (
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#e05c4a', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e05c4a' }} /> LIVE
-                                                </span>
-                                            ) : isFinished ? (
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green-bright)', letterSpacing: 1 }}>FT</span>
-                                            ) : (
-                                                <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
-                                                    {getAdjustedKickoff(m.kickoff).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Tunis' })} <span style={{ fontSize: 9, opacity: 0.7 }}>GMT+1</span>
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Home Team */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                {homeTeam ? (
-                                                    <TeamFlag teamCode={m.home_team} size={24} />
-                                                ) : (
-                                                    <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
-                                                )}
-                                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
-                                                    {homeTeam?.name ?? formatPlaceholder(m.home_team)}
-                                                </span>
-                                            </div>
-                                            <span style={{ fontSize: 20, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
-                                                {(isLive || isFinished) ? m.actualHomeScore : '—'}
-                                            </span>
-                                        </div>
-
-                                        {/* Away Team */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                {awayTeam ? (
-                                                    <TeamFlag teamCode={m.away_team} size={24} />
-                                                ) : (
-                                                    <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🏳️</span>
-                                                )}
-                                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>
-                                                    {awayTeam?.name ?? formatPlaceholder(m.away_team)}
-                                                </span>
-                                            </div>
-                                            <span style={{ fontSize: 20, fontFamily: 'Bebas Neue', color: (isLive || isFinished) ? 'var(--gold)' : 'var(--muted)' }}>
-                                                {(isLive || isFinished) ? m.actualAwayScore : '—'}
-                                            </span>
-                                        </div>
-
-                                        {/* Venue & Points */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                                            <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span>🏟️</span> {m.venue}, {m.city}
-                                            </div>
-                                            {provisionalPoints !== null && provisionalPoints > 0 && (
-                                                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,168,67,0.1)', padding: '2px 8px', borderRadius: 4 }}>
-                                                    +{provisionalPoints} pts
-                                                </div>
-                                            )}
-                                        </div>
-
-                                    </div>
-                                )
-                            })}
+                            {matches.map(m => <MatchCard key={m.id} m={m} />)}
                         </div>
                     </div>
                 ))}

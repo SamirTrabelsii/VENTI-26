@@ -29,12 +29,12 @@ type Slide = {
 
 const STORAGE_PREFIX = 'venti26:whats-new'
 const SCORING_LADDER = [
-    { error: '0', points: '+15', label: 'Perfect' },
-    { error: '1', points: '+5', label: 'Small Miss' },
-    { error: '2', points: '+0', label: 'Close' },
-    { error: '3', points: '-5', label: 'Penalty' },
-    { error: '4', points: '-8', label: 'Huge Miss' },
-    { error: '5+', points: '-10', label: 'Wiped' }
+    { error: '0', points: '+15', label: 'Exact Score' },
+    { error: '1', points: '+5', label: '1 Goal Off' },
+    { error: '2', points: '+0', label: '2 Goals Off' },
+    { error: '3', points: '-5', label: '3 Goals Off' },
+    { error: '4', points: '-8', label: '4 Goals Off' },
+    { error: '5+', points: '-10', label: '5+ Goals Off' }
 ]
 
 export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
@@ -46,9 +46,9 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
 
     const slides = useMemo<Slide[]>(() => [
         {
-            title: 'New scoring system',
-            body: 'Predictions heavily reward exact scores and severely penalize large errors. A wrong outcome gives max 7 mercy points.',
-            note: 'Example: actual 2-1, prediction 3-1 = Correct Outcome (+10) and 1 goal error (+5) = 15 points. But an Exact Score gives 25 points! (Note: Knockouts still award +10 for correct qualifier).',
+            title: 'New Scoring System',
+            body: 'Points are based on your Total Goal Error. Perfect scores earn max points, while large errors wipe them. Plus a new Goal/No-Goal Bonus (+1 pt)!',
+            note: '',
             Icon: Target,
             accent: '#D4A843',
             variant: 'scoring'
@@ -244,6 +244,8 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -18 }}
                                     transition={{ duration: 0.2 }}
+                                    className="max-h-[55vh] overflow-y-auto pr-1 md:max-h-[65vh]"
+                                    style={{ scrollbarWidth: 'thin' }}
                                 >
                                     <div className="mb-5 grid h-16 w-16 place-items-center border bg-black/45" style={{ borderColor: `${slide.accent}88` }}>
                                         <Icon size={30} style={{ color: slide.accent }} />
@@ -252,29 +254,14 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     <h2 id="whats-new-title" className="font-display text-3xl uppercase leading-tight tracking-wide text-white md:text-4xl">
                                         {slide.title}
                                     </h2>
-                                    <p className="mt-4 text-base leading-7 text-zinc-300">
-                                        {slide.body}
-                                    </p>
+                                    {slide.variant !== 'scoring' && (
+                                        <p className="mt-4 text-base leading-7 text-zinc-300">
+                                            {slide.body}
+                                        </p>
+                                    )}
 
                                     {slide.variant === 'scoring' ? (
-                                        <div className="mt-5 space-y-4">
-                                            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2">
-                                                <div className="border border-[#D4A843]/30 bg-[#D4A843]/10 p-3 text-center">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Outcome</p>
-                                                    <p className="mt-1 font-display text-2xl uppercase text-[#D4A843]">+10</p>
-                                                </div>
-                                                <div className="grid place-items-center text-zinc-500">+</div>
-                                                <div className="border border-[#D4A843]/30 bg-[#D4A843]/10 p-3 text-center">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Proximity</p>
-                                                    <p className="mt-1 font-display text-2xl uppercase text-[#D4A843]">-10/+15</p>
-                                                </div>
-                                                <div className="grid place-items-center text-zinc-500">=</div>
-                                                <div className="border border-white/10 bg-white/[0.04] p-3 text-center">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Points</p>
-                                                    <p className="mt-1 font-display text-2xl uppercase text-white">0-25</p>
-                                                </div>
-                                            </div>
-
+                                        <div className="mt-4 space-y-3">
                                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                                                 {SCORING_LADDER.map(item => (
                                                     <div key={item.error} className="border border-white/10 bg-black/35 p-2 text-center">
@@ -285,9 +272,44 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                                 ))}
                                             </div>
 
-                                            <div className="flex items-start gap-3 border border-white/10 bg-white/[0.04] p-4">
-                                                <Medal size={18} className="mt-0.5 shrink-0 text-[#D4A843]" />
-                                                <p className="text-sm leading-6 text-zinc-300">{slide.note}</p>
+                                            <div className="border border-white/10 bg-white/[0.04] p-3">
+                                                <div className="mb-3 flex items-center gap-2">
+                                                    <Target size={14} className="text-[#D4A843]" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Example Scenario</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-center">
+                                                    <div className="flex-1 bg-black/50 border border-[#D4A843]/30 p-2 rounded">
+                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-widest">Actual</span>
+                                                        <span className="block text-xl font-display text-white mt-1">2 - 1</span>
+                                                    </div>
+                                                    <div className="text-zinc-600 font-black text-[10px] uppercase">VS</div>
+                                                    <div className="flex-1 bg-black/50 border border-white/10 p-2 rounded">
+                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-widest">Prediction</span>
+                                                        <span className="block text-xl font-display text-white mt-1">3 - 1</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                                                    <div className="text-left">
+                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">Outcome</span>
+                                                        <span className="block text-sm font-display text-[#D4A843]">+10</span>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">1 Goal Error</span>
+                                                        <span className="block text-sm font-display text-[#D4A843]">+5</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="block text-[9px] text-[#D4A843] uppercase font-black tracking-wider">Total</span>
+                                                        <span className="block text-sm font-display text-[#D4A843]">15 pts</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-start gap-3 border border-[#D4A843]/20 bg-[#D4A843]/5 p-3 rounded">
+                                                <Sparkles size={14} className="mt-0.5 shrink-0 text-[#D4A843]" />
+                                                <p className="text-xs leading-5 text-zinc-300">
+                                                    <strong className="text-[#D4A843]">Goal/No-Goal Bonus:</strong> Earn <strong className="text-white">+1 pt</strong> for correctly predicting if both teams will score (e.g. 1-1) or if at least one team keeps a clean sheet (e.g. 2-0).
+                                                </p>
                                             </div>
                                         </div>
                                     ) : (
