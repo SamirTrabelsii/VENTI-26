@@ -10,123 +10,20 @@ import { motion } from 'framer-motion'
 
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
-// ─── BADGE DEFINITIONS ────────────────────────────────────────────────────────
+import { BADGE_DEFINITIONS, getBadgeProgress } from '@/lib/badges'
 
-type Tier = 'silver' | 'gold' | 'legendary'
-type Category = 'accuracy' | 'social' | 'bravery' | 'legendary'
-
-interface Badge {
-    id: string
-    icon: string
-    label: string
-    definition: string
-    condition: string
-    tier: Tier
-    category: Category
-    maxProgress: number
-}
+type Tier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'crown' | 'lightning'
 
 const TIER_CONFIG: Record<Tier, {
     label: string; color: string; glow: string; border: string; bg: string
 }> = {
+    bronze: { label: 'Bronze', color: '#cd7f32', glow: 'rgba(205,127,50,0.22)', border: 'rgba(205,127,50,0.32)', bg: 'rgba(205,127,50,0.06)' },
     silver: { label: 'Silver', color: '#b0b8c8', glow: 'rgba(176,184,200,0.22)', border: 'rgba(176,184,200,0.32)', bg: 'rgba(176,184,200,0.06)' },
     gold: { label: 'Gold', color: '#d4a843', glow: 'rgba(212,168,67,0.28)', border: 'rgba(212,168,67,0.42)', bg: 'rgba(212,168,67,0.09)' },
-    legendary: { label: 'Legendary', color: '#e05c4a', glow: 'rgba(224,92,74,0.28)', border: 'rgba(224,92,74,0.42)', bg: 'rgba(224,92,74,0.09)' },
+    diamond: { label: 'Diamond', color: '#5b9fff', glow: 'rgba(91,159,255,0.28)', border: 'rgba(91,159,255,0.42)', bg: 'rgba(91,159,255,0.09)' },
+    crown: { label: 'Crown', color: '#e05c4a', glow: 'rgba(224,92,74,0.28)', border: 'rgba(224,92,74,0.42)', bg: 'rgba(224,92,74,0.09)' },
+    lightning: { label: 'Lightning', color: '#a855f7', glow: 'rgba(168,85,247,0.28)', border: 'rgba(168,85,247,0.42)', bg: 'rgba(168,85,247,0.09)' },
 }
-
-const CATEGORY_LABEL: Record<Category, string> = {
-    accuracy: 'Accuracy',
-    social: 'Social',
-    bravery: 'Bravery',
-    legendary: 'Legend',
-}
-
-const ALL_BADGES: Badge[] = [
-    {
-        id: 'sharpshooter', icon: '🎯', tier: 'silver', category: 'accuracy',
-        label: 'Sharpshooter',
-        definition: 'Scoreline precision separates real analysts from casual fans. You called three exact results in a single round.',
-        condition: 'Get 3 exact score predictions correct within a single group round.',
-        maxProgress: 3,
-    },
-    {
-        id: 'hot_streak', icon: '🔥', tier: 'silver', category: 'accuracy',
-        label: 'Hot Streak',
-        definition: 'Five matches in a row. The momentum was real — and so was your reading of the game.',
-        condition: 'Predict the correct outcome in 5 consecutive matches.',
-        maxProgress: 5,
-    },
-    {
-        id: 'giant_killer', icon: '⚡', tier: 'silver', category: 'bravery',
-        label: 'Giant Killer',
-        definition: 'You saw the upset while everyone backed the favourite. Three times you were right when the crowd was wrong.',
-        condition: 'Correctly predict 3 matches where the lower-ranked FIFA team wins.',
-        maxProgress: 3,
-    },
-    {
-        id: 'recruiter', icon: '🤝', tier: 'silver', category: 'social',
-        label: 'The Recruiter',
-        definition: 'A prediction game lives or dies by the quality of the rivals. You built the squad.',
-        condition: 'Create a group and have 5 or more players join it.',
-        maxProgress: 5,
-    },
-    {
-        id: 'score_oracle', icon: '🔢', tier: 'gold', category: 'accuracy',
-        label: 'Score Oracle',
-        definition: 'Ten exact scorelines. Not lucky guesses — pattern recognition at the highest level.',
-        condition: 'Accumulate 10 exact score predictions across the full tournament.',
-        maxProgress: 10,
-    },
-    {
-        id: 'pole_position', icon: '📈', tier: 'gold', category: 'social',
-        label: 'Pole Position',
-        definition: 'When the group stage closed, you were top of the board. Now you have a target on your back.',
-        condition: 'Be ranked #1 in any of your groups at the end of the group stage.',
-        maxProgress: 1,
-    },
-    {
-        id: 'contrarian', icon: '🧠', tier: 'gold', category: 'bravery',
-        label: 'The Contrarian',
-        definition: 'The community was wrong, and you knew it — ten separate times. Independent thinking rewarded.',
-        condition: 'Correctly predict 10 matches where your pick differed from the community majority.',
-        maxProgress: 10,
-    },
-    {
-        id: 'perfect_day', icon: '✨', tier: 'gold', category: 'accuracy',
-        label: 'Perfect Day',
-        definition: 'One full match day. Every game. Every result. A statistical near-impossibility — and you did it.',
-        condition: 'Predict every match result correctly on a single match day (minimum 3 games).',
-        maxProgress: 1,
-    },
-    {
-        id: 'hat_trick_hero', icon: '🎩', tier: 'legendary', category: 'accuracy',
-        label: 'Hat-trick Hero',
-        definition: 'Three exact scores. Back. To. Back. To. Back. You are not predicting. You are reading the future.',
-        condition: 'Get 3 exact score predictions correct in 3 consecutive matches.',
-        maxProgress: 3,
-    },
-    {
-        id: 'final_whistle', icon: '🏟️', tier: 'legendary', category: 'accuracy',
-        label: 'Final Whistle',
-        definition: 'The biggest match in world football. Billions watching. You called the exact scoreline.',
-        condition: 'Predict the exact final score of the World Cup 2026 Final.',
-        maxProgress: 1,
-    },
-    {
-        id: 'the_oracle', icon: '🔮', tier: 'legendary', category: 'legendary',
-        label: 'The Oracle',
-        definition: 'Across 32 nations, 72 matches, and thousands of competitors — you sit in the top 1% globally. There is no higher honour.',
-        condition: 'Finish the tournament ranked in the top 1% of all players by accuracy.',
-        maxProgress: 1,
-    },
-    {
-        id: 'nostradamus', icon: '👑', tier: 'legendary', category: 'legendary',
-        label: 'Nostradamus',
-        definition: 'Before a single ball was kicked, before the groups were even played, you named the champion. And you were right.',
-        condition: 'Correctly predict the World Cup 2026 champion before the tournament begins.',
-        maxProgress: 1,
-    },
-]
 
 const DNA_PROFILES = [
     { id: 'sniper', icon: '🎯', label: 'The Sniper', color: '#d4a843', description: 'Exact scores, precise margins. You do not just predict results — you predict scorelines. Patience and precision define you.' },
@@ -147,7 +44,7 @@ function ProfileContent() {
     const [correctCount, setCorrectCount] = useState(0)
     const [currentStreak, setCurrentStreak] = useState(0)
     const [bestStreak, setBestStreak] = useState(0)
-    const [selectedBadge, setSelectedBadge] = useState<(Badge & { progress: number; unlocked: boolean }) | null>(null)
+    const [selectedBadge, setSelectedBadge] = useState<any>(null)
     const [activeFilter, setActiveFilter] = useState<'all' | Tier>('all')
     const [loading, setLoading] = useState(true)
 
@@ -155,6 +52,10 @@ function ProfileContent() {
     const [historyMatches, setHistoryMatches] = useState<any[]>([])
     const [pointsProgression, setPointsProgression] = useState<number[]>([])
     const [visibleHistoryCount, setVisibleHistoryCount] = useState(10)
+    
+    // DB Badges & Progress
+    const [earnedBadges, setEarnedBadges] = useState<Set<string>>(new Set())
+    const [badgeProgress, setBadgeProgress] = useState<Record<string, { current: number; target: number }>>({})
 
     useEffect(() => {
         const init = async () => {
@@ -189,6 +90,10 @@ function ProfileContent() {
             }))
 
             const allPredictions = [...(predictions || []), ...normalizedBracketPicks]
+
+            // Fetch earned badges from DB
+            const { data: dbBadges } = await supabase.from('user_badges').select('badge_id').eq('user_id', targetUserId)
+            setEarnedBadges(new Set((dbBadges || []).map(b => b.badge_id)))
 
             // Fetch DB Matches
             const { data: dbMatches } = await supabase.from('matches').select('*').eq('status', 'finished')
@@ -332,18 +237,31 @@ function ProfileContent() {
             // add starting zero
             setPointsProgression([0, ...prog])
 
+            // Calculate Badge Progress
+            const progress = getBadgeProgress({
+                userId: targetUserId,
+                predictions: allPredictions,
+                bracketPicks: bracketPicks || [],
+                finishedMatches: hist,
+                allFinishedMatches: hist,
+            }, new Set((dbBadges || []).map(b => b.badge_id)))
+            setBadgeProgress(progress)
+
             setLoading(false)
         }
         init()
-    }, [])
+    }, [searchParams])
 
     // Badges & DNA
-    const badgeProgress: Record<string, number> = {
-        sharpshooter: Math.min(exactCount, 3), hot_streak: Math.min(bestStreak, 5), giant_killer: 0, recruiter: 0,
-        score_oracle: Math.min(exactCount, 10), pole_position: 0, contrarian: 0, perfect_day: 0, hat_trick_hero: 0,
-        final_whistle: 0, the_oracle: 0, nostradamus: 0,
-    }
-    const badges = ALL_BADGES.map(b => ({ ...b, progress: badgeProgress[b.id] ?? 0, unlocked: (badgeProgress[b.id] ?? 0) >= b.maxProgress }))
+    const badges = BADGE_DEFINITIONS.map(b => {
+        const p = badgeProgress[b.id] || { current: 0, target: 1 }
+        return {
+            ...b,
+            progress: Math.min(p.current, p.target),
+            maxProgress: p.target,
+            unlocked: earnedBadges.has(b.id)
+        }
+    })
     const unlockedCount = badges.filter(b => b.unlocked).length
     const accuracy = predCount > 0 ? Math.round((exactCount / predCount) * 100) : 0
     const resultAccuracy = predCount > 0 ? Math.round((correctCount / predCount) * 100) : 0
@@ -379,14 +297,15 @@ function ProfileContent() {
                 <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(ellipse 55% 40% at 15% 0%, rgba(212,168,67,0.09) 0%, transparent 60%), radial-gradient(ellipse 55% 40% at 85% 0%, rgba(212,168,67,0.09) 0%, transparent 60%)` }} />
                 <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.022, backgroundImage: 'linear-gradient(var(--cream) 1px,transparent 1px),linear-gradient(90deg,var(--cream) 1px,transparent 1px)', backgroundSize: '48px 48px' }} />
 
-                <div style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 40px 44px', position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 32 }}>
+                <div className="resp-flex-stack resp-padding" style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 40px 44px', position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 32 }}>
                     <img 
                         src={getRobohashUrl(displayName, 120)} 
                         alt="Avatar"
+                        className="resp-hero-avatar"
                         style={{ width: 120, height: 120, borderRadius: '50%', background: profile?.avatar_color || 'var(--surface2)', border: '4px solid var(--gold)', objectFit: 'cover', boxShadow: '0 0 40px rgba(212,168,67,0.3)' }}
                     />
                     <div>
-                        <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 64, lineHeight: 0.9, color: 'var(--cream)', letterSpacing: 2, marginBottom: 8 }}>
+                        <h1 className="resp-hero-title" style={{ fontFamily: 'Bebas Neue', fontSize: 64, lineHeight: 0.9, color: 'var(--cream)', letterSpacing: 2, marginBottom: 8 }}>
                             {displayName}
                         </h1>
                         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
@@ -398,10 +317,10 @@ function ProfileContent() {
                 </div>
             </div>
 
-            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 40px' }}>
+            <div className="resp-padding" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 40px' }}>
                 
                 {/* ── KPI & PROGRESSION GRAPH ROW ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24, marginBottom: 52 }}>
+                <div className="resp-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24, marginBottom: 52 }}>
                     {/* KPIs */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {[
@@ -471,7 +390,7 @@ function ProfileContent() {
                 {/* ── MATCH HISTORY ── */}
                 <Section label="Match History">
                     <div style={{ background: 'var(--surface2)', borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '16px 24px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                        <div className="match-card-header resp-match-row-header" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '16px 24px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
                             <div>Date</div>
                             <div>Match</div>
                             <div style={{ textAlign: 'center' }}>Your Prediction</div>
@@ -479,27 +398,58 @@ function ProfileContent() {
                         </div>
 
                         {historyMatches.length > 0 ? historyMatches.slice().reverse().slice(0, visibleHistoryCount).map((m, i) => (
-                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '20px 24px', borderBottom: i < historyMatches.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                                <div style={{ fontSize: 12, color: 'var(--dim)' }}>
+                            <div key={i} className="match-card" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '20px 24px', borderBottom: i < historyMatches.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                                
+                                {/* DESKTOP LAYOUT */}
+                                <div className="desktop-only" style={{ fontSize: 12, color: 'var(--dim)' }}>
                                     {new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}<br/>
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                                         {new Date(m.kickoff).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                
+                                <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36, textAlign: 'right' }}>{m.home_team}</span>
                                     <div style={{ background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 6, fontSize: 14, fontFamily: 'Bebas Neue', letterSpacing: 1, color: 'var(--cream)', border: '1px solid var(--border)' }}>
                                         {m.real_home_score} - {m.real_away_score}
                                     </div>
                                     <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36 }}>{m.away_team}</span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+
+                                <div className="desktop-only" style={{ textAlign: 'center' }}>
                                     <div style={{ background: m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'rgba(212,168,67,0.1)' : m.type === 'correct' || m.type === 'goal_diff' ? 'rgba(91,159,255,0.1)' : 'var(--surface3)') : 'var(--black)', color: m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#5b9fff' : 'var(--muted)') : 'var(--muted)', border: `1px solid ${m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#5b9fff' : 'var(--border)') : 'rgba(255,255,255,0.1)'}`, padding: '4px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>
                                         {m.pred_home_score !== null && m.pred_home_score !== undefined ? `${m.pred_home_score} - ${m.pred_away_score}` : 'Missed'}
                                     </div>
                                 </div>
-                                <div style={{ textAlign: 'right', fontFamily: 'Bebas Neue', fontSize: 24, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
+                                <div className="desktop-only" style={{ textAlign: 'right', fontFamily: 'Bebas Neue', fontSize: 24, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
                                     +{m.points}
+                                </div>
+
+                                {/* MOBILE LAYOUT */}
+                                <div className="match-card-mobile-only match-card-mobile-header">
+                                    <div>{new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div style={{ color: 'var(--gold)' }}>{m.group_label}</div>
+                                </div>
+                                <div className="match-card-mobile-only match-card-mobile-teams">
+                                    <span style={{ fontSize: 16, width: 40, textAlign: 'right', color: 'var(--dim)' }}>{m.home_team}</span>
+                                    <span>{m.real_home_score} - {m.real_away_score}</span>
+                                    <span style={{ fontSize: 16, width: 40, textAlign: 'left', color: 'var(--dim)' }}>{m.away_team}</span>
+                                </div>
+                                <div className="match-card-mobile-only match-card-mobile-footer">
+                                    <div>
+                                        <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', marginRight: 8 }}>Pick:</span>
+                                        {m.pred_home_score !== null && m.pred_home_score !== undefined ? (
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#10b981' : 'var(--cream)' }}>
+                                                {m.pred_home_score} - {m.pred_away_score}
+                                                {m.type === 'exact' && <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(212,168,67,0.2)', color: 'var(--gold)', padding: '2px 4px', borderRadius: 4 }}>EXACT</span>}
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: 12, color: 'var(--red-accent)' }}>Missed</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
+                                        +{m.points} pts
+                                    </div>
                                 </div>
                             </div>
                         )) : (
@@ -526,15 +476,33 @@ function ProfileContent() {
                     right={
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                {unlockedCount} / {ALL_BADGES.length} unlocked
+                                {unlockedCount} / {BADGE_DEFINITIONS.length} unlocked
                             </span>
                         </div>
                     }
                 >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))', gap: 12 }}>
-                        {filteredBadges.map(b => (
-                            <BadgeCard key={b.id} badge={b} onClick={() => setSelectedBadge(b)} />
-                        ))}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+                        {(Object.keys(TIER_CONFIG) as Tier[]).map(tierKey => {
+                            const tierBadges = filteredBadges.filter(b => b.tier === tierKey)
+                            if (tierBadges.length === 0) return null
+                            const t = TIER_CONFIG[tierKey]
+                            
+                            return (
+                                <div key={tierKey}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: t.color, textTransform: 'uppercase', letterSpacing: 2 }}>
+                                            {t.label} Tier
+                                        </div>
+                                        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${t.border}, transparent)` }} />
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))', gap: 16 }}>
+                                        {tierBadges.map(b => (
+                                            <BadgeCard key={b.id} badge={b} onClick={() => setSelectedBadge(b)} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </Section>
 
@@ -575,12 +543,28 @@ function Section({ label, children, right }: { label: string; children: React.Re
     )
 }
 
-function BadgeCard({ badge, onClick }: { badge: Badge & { progress: number; unlocked: boolean }; onClick: () => void }) {
-    const t = TIER_CONFIG[badge.tier]
+function BadgeCard({ badge, onClick }: { badge: any; onClick: () => void }) {
+    const t = TIER_CONFIG[badge.tier as Tier]
     const pct = badge.maxProgress > 1 ? Math.round((badge.progress / badge.maxProgress) * 100) : badge.unlocked ? 100 : 0
 
     return (
-        <div onClick={onClick} style={{ background: badge.unlocked ? t.bg : 'var(--surface2)', border: `1px solid ${badge.unlocked ? t.border : 'var(--border)'}`, borderRadius: 14, padding: '16px', cursor: 'pointer', opacity: badge.unlocked ? 1 : 0.6, filter: badge.unlocked ? 'none' : 'grayscale(0.8)' }}>
+        <div onClick={onClick} style={{ 
+            background: badge.unlocked ? t.bg : 'var(--surface2)', 
+            border: `1px solid ${badge.unlocked ? t.border : 'var(--border)'}`, 
+            borderRadius: 14, 
+            padding: '16px', 
+            cursor: 'pointer', 
+            opacity: badge.unlocked ? 1 : 0.5, 
+            filter: badge.unlocked ? 'none' : 'grayscale(1)',
+            boxShadow: badge.unlocked ? `0 0 24px ${t.glow}, inset 0 0 12px ${t.glow}` : 'none',
+            transform: badge.unlocked ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            position: 'relative',
+            overflow: 'hidden'
+        }}>
+            {badge.unlocked && (
+                <div style={{ position: 'absolute', top: -20, right: -20, width: 60, height: 60, background: `radial-gradient(circle, ${t.color}33 0%, transparent 70%)`, pointerEvents: 'none' }} />
+            )}
             <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: badge.unlocked ? `${t.color}1a` : 'var(--surface3)', border: `2px solid ${badge.unlocked ? t.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
                     {badge.icon}
@@ -594,14 +578,25 @@ function BadgeCard({ badge, onClick }: { badge: Badge & { progress: number; unlo
     )
 }
 
-function BadgeModal({ badge, onClose }: { badge: Badge & { progress: number; unlocked: boolean }; onClose: () => void }) {
-    const t = TIER_CONFIG[badge.tier]
+function BadgeModal({ badge, onClose }: { badge: any; onClose: () => void }) {
+    const t = TIER_CONFIG[badge.tier as Tier]
     return (
         <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
             <div style={{ width: '100%', maxWidth: 420, background: 'var(--surface2)', border: `1px solid ${t.border}`, borderRadius: 22, padding: 32, textAlign: 'center' }}>
                 <div style={{ fontSize: 64, marginBottom: 16 }}>{badge.icon}</div>
                 <h2 style={{ fontFamily: 'Bebas Neue', fontSize: 36, color: t.color, marginBottom: 12 }}>{badge.label}</h2>
-                <p style={{ color: 'var(--dim)', fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>{badge.definition}</p>
+                <p style={{ color: 'var(--dim)', fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>{badge.description}</p>
+                {badge.maxProgress > 1 && (
+                    <div style={{ marginBottom: 24 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+                            <span>Progress</span>
+                            <span>{badge.progress} / {badge.maxProgress}</span>
+                        </div>
+                        <div style={{ height: 6, background: 'var(--surface3)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: t.color, width: `${(badge.progress / badge.maxProgress) * 100}%` }} />
+                        </div>
+                    </div>
+                )}
                 <button onClick={onClose} style={{ padding: '10px 24px', background: 'var(--surface3)', borderRadius: 8, color: 'var(--cream)', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Close</button>
             </div>
         </div>

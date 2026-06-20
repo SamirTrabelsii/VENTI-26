@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { scoreMatch } from '@/lib/scoring'
 import { createAdminClient, verifyAdmin } from '@/lib/supabase/admin'
 import { fetchAllRows } from '@/lib/supabase/pagination'
+import { evaluateBadges } from '@/lib/badges'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/recalculate
@@ -159,6 +160,41 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
         }
 
         userTotals.set(userId, { total_points, exact_scores, correct_results, streak })
+    }
+
+    // ── Badge Evaluation ──────────────────────────────────────────────────
+    const badgeUpserts: Array<{ user_id: string; badge_id: string }> = []
+
+    for (const userId of targetUserIds) {
+        const userPreds = predictions.filter((p: any) => p.user_id === userId)
+        const userBracket = bracketPicks.filter((bp: any) => bp.user_id === userId)
+
+        try {
+            const earned = evaluateBadges({
+                userId,
+                predictions: userPreds,
+                allPredictions: predictions,
+                bracketPicks: userBracket,
+                finishedMatches,
+                allFinishedMatches: finishedMatches,
+            })
+
+            for (const badgeId of earned) {
+                badgeUpserts.push({ user_id: userId, badge_id: badgeId })
+            }
+        } catch (e) {
+            // Badge evaluation should never block scoring
+            console.error(`Badge eval error for ${userId}:`, e)
+        }
+    }
+
+    // Upsert badges in batches
+    if (badgeUpserts.length > 0) {
+        const batchSize = 50
+        for (let i = 0; i < badgeUpserts.length; i += batchSize) {
+            const batch = badgeUpserts.slice(i, i + batchSize)
+            await db.from('user_badges').upsert(batch, { onConflict: 'user_id,badge_id' }).then(() => {})
+        }
     }
 
     // Write results to DB — update every (user, group) row

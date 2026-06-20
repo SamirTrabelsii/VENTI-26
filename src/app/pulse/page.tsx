@@ -232,12 +232,12 @@ export default async function PulsePage() {
         <div style={{ minHeight: '100vh', background: 'var(--black)', color: 'var(--cream)' }}>
             <Nav initials={profile?.avatar_initials ?? 'PL'} isGuest={!user} />
 
-            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 5% 60px' }}>
+            <div className="resp-padding" style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 5% 60px' }}>
                 <div style={{ marginBottom: 40 }}>
-                    <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 64, color: 'var(--cream)', letterSpacing: 1, lineHeight: 1 }}>
+                    <h1 className="pulse-hero-title" style={{ fontFamily: 'Bebas Neue', fontSize: 64, color: 'var(--cream)', letterSpacing: 1, lineHeight: 1 }}>
                         PULSE <span style={{ color: 'var(--gold)' }}>ANALYTICS</span>
                     </h1>
-                    <p style={{ color: 'var(--muted)', marginTop: 8, fontSize: 16 }}>
+                    <p className="pulse-hero-sub" style={{ color: 'var(--muted)', marginTop: 8, fontSize: 16 }}>
                         Deep data insights derived from {totalPreds.toLocaleString()} global predictions.
                     </p>
                 </div>
@@ -253,13 +253,16 @@ export default async function PulsePage() {
                     {topWinners.length >= 3 ? (
                         <>
                             {/* Podium: 2nd — 1st — 3rd */}
-                            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 16, marginBottom: 32 }}>
+                            <div className="pulse-podium" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 16, marginBottom: 32 }}>
                                 {/* 2nd Place — Silver */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 140 }}>
-                                    <img src={getFlagUrl(podiumSilver.team_code)} alt={podiumSilver.team_code} width={48} height={36} style={{ borderRadius: 6, border: '2px solid #c0c0c0', marginBottom: 12 }} />
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumSilver.name}</div>
-                                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Bebas Neue', color: '#c0c0c0', letterSpacing: 1 }}>{podiumSilver.percentage}%</div>
-                                    <div style={{
+                                <div className="pulse-podium-2" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 140 }}>
+                                    <div className="pulse-podium-badge" style={{ display: 'none', color: '#c0c0c0' }}>2ND</div>
+                                    <img className="pulse-podium-img" src={getFlagUrl(podiumSilver.team_code)} alt={podiumSilver.team_code} width={48} height={36} style={{ borderRadius: 6, border: '2px solid #c0c0c0', marginBottom: 12 }} />
+                                    <div className="pulse-podium-info">
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumSilver.name}</div>
+                                        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Bebas Neue', color: '#c0c0c0', letterSpacing: 1, textAlign: 'center' }}>{podiumSilver.percentage}%</div>
+                                    </div>
+                                    <div className="pulse-podium-block" style={{
                                         width: '100%', height: 80, marginTop: 12,
                                         background: 'linear-gradient(180deg, #c0c0c0 0%, #888 100%)',
                                         borderRadius: '8px 8px 0 0',
@@ -269,12 +272,14 @@ export default async function PulsePage() {
                                 </div>
 
                                 {/* 1st Place — Gold */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 160 }}>
+                                <div className="pulse-podium-1" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 160 }}>
                                     <div style={{ fontSize: 28, marginBottom: 4 }}>🏆</div>
-                                    <img src={getFlagUrl(podiumGold.team_code)} alt={podiumGold.team_code} width={56} height={42} style={{ borderRadius: 6, border: '2px solid var(--gold)', boxShadow: '0 0 20px rgba(212,175,55,0.4)', marginBottom: 12 }} />
-                                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumGold.name}</div>
-                                    <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'Bebas Neue', color: 'var(--gold)', letterSpacing: 1 }}>{podiumGold.percentage}%</div>
-                                    <div style={{
+                                    <img className="pulse-podium-img" src={getFlagUrl(podiumGold.team_code)} alt={podiumGold.team_code} width={56} height={42} style={{ borderRadius: 6, border: '2px solid var(--gold)', boxShadow: '0 0 20px rgba(212,175,55,0.4)', marginBottom: 12 }} />
+                                    <div className="pulse-podium-info">
+                                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumGold.name}</div>
+                                        <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'Bebas Neue', color: 'var(--gold)', letterSpacing: 1, textAlign: 'center' }}>{podiumGold.percentage}%</div>
+                                    </div>
+                                    <div className="pulse-podium-block" style={{
                                         width: '100%', height: 120, marginTop: 12,
                                         background: 'linear-gradient(180deg, var(--gold) 0%, #a8860f 100%)',
                                         borderRadius: '8px 8px 0 0',
@@ -284,11 +289,14 @@ export default async function PulsePage() {
                                 </div>
 
                                 {/* 3rd Place — Bronze */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 140 }}>
-                                    <img src={getFlagUrl(podiumBronze.team_code)} alt={podiumBronze.team_code} width={48} height={36} style={{ borderRadius: 6, border: '2px solid #cd7f32', marginBottom: 12 }} />
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumBronze.name}</div>
-                                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Bebas Neue', color: '#cd7f32', letterSpacing: 1 }}>{podiumBronze.percentage}%</div>
-                                    <div style={{
+                                <div className="pulse-podium-3" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 140 }}>
+                                    <div className="pulse-podium-badge" style={{ display: 'none', color: '#cd7f32' }}>3RD</div>
+                                    <img className="pulse-podium-img" src={getFlagUrl(podiumBronze.team_code)} alt={podiumBronze.team_code} width={48} height={36} style={{ borderRadius: 6, border: '2px solid #cd7f32', marginBottom: 12 }} />
+                                    <div className="pulse-podium-info">
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', textAlign: 'center', marginBottom: 4 }}>{podiumBronze.name}</div>
+                                        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Bebas Neue', color: '#cd7f32', letterSpacing: 1, textAlign: 'center' }}>{podiumBronze.percentage}%</div>
+                                    </div>
+                                    <div className="pulse-podium-block" style={{
                                         width: '100%', height: 56, marginTop: 12,
                                         background: 'linear-gradient(180deg, #cd7f32 0%, #8b5b22 100%)',
                                         borderRadius: '8px 8px 0 0',
@@ -300,9 +308,9 @@ export default async function PulsePage() {
 
                             {/* Runner Ups: #4 and #5 */}
                             {runnerUps.length > 0 && (
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: 32, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+                                <div className="pulse-runnerups" style={{ display: 'flex', justifyContent: 'center', gap: 32, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
                                     {runnerUps.map((r, i) => (
-                                        <div key={r.team_code} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div key={r.team_code} className="pulse-runnerup-item" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--dim)' }}>#{i + 4}</span>
                                             <img src={getFlagUrl(r.team_code)} alt={r.team_code} width={28} height={20} style={{ borderRadius: 4, border: '1px solid var(--border)' }} />
                                             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)' }}>{r.name}</span>
@@ -329,9 +337,9 @@ export default async function PulsePage() {
                             Percentage of users who have each team reaching the semi-finals.
                         </p>
 
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <div className="pulse-golden4" style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
                             {golden4.map((team, i) => (
-                                <div key={team.team_code} style={{
+                                <div key={team.team_code} className="pulse-golden4-item" style={{
                                     width: 120,
                                     background: i < 4 ? 'linear-gradient(145deg, rgba(212,168,67,0.12) 0%, var(--surface3) 100%)' : 'var(--surface3)',
                                     borderRadius: 14, padding: '16px 12px',
@@ -352,7 +360,7 @@ export default async function PulsePage() {
                 {/* ============================================= */}
                 {/* BENTO BOX GRID                                */}
                 {/* ============================================= */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+                <div className="resp-bento-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
 
                     {/* --- ROW 1: STATS --- */}
 
@@ -395,7 +403,7 @@ export default async function PulsePage() {
                     </div>
 
                     {/* MOST LETHAL ATTACK */}
-                    <div style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+                    <div className="pulse-bento-card" style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
                         <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Most Lethal Attack</h2>
                         <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
@@ -408,13 +416,13 @@ export default async function PulsePage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             {lethalAttacks.length > 0 ? lethalAttacks.map((team, index) => (
-                                <div key={team.teamCode} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <div key={team.teamCode} className="pulse-lethal-row" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                     <div style={{ width: 24, fontSize: 16, fontWeight: 800, color: index === 0 ? 'var(--gold)' : 'var(--dim)' }}>#{index + 1}</div>
                                     <img src={getFlagUrl(team.teamCode)} alt={team.teamCode} width={32} height={24} style={{ borderRadius: 4, border: '1px solid var(--border)' }} />
                                     <div style={{ flex: 1 }}>
                                         <div style={{ color: 'var(--cream)', fontWeight: 600, fontSize: 15 }}>{TEAMS.find(t => t.code === team.teamCode)?.name || team.teamCode}</div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <div className="pulse-lethal-stats" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                         <div style={{ textAlign: 'center' }}>
                                             <div style={{ fontSize: 18, fontWeight: 800, color: index === 0 ? 'var(--gold)' : 'var(--cream)', fontFamily: 'Bebas Neue', letterSpacing: 1 }}>
                                                 {team.avgGoals.toFixed(2)}
@@ -440,7 +448,7 @@ export default async function PulsePage() {
                     {/* --- ROW 2: COMMUNITY PERFORMANCE --- */}
 
                     {/* COMMUNITY PULSE HEATMAP */}
-                    <div style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+                    <div className="pulse-bento-card" style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
                         <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Community Pulse</h2>
                         <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>A live heartbeat of the hivemind. Hover for match details.</p>
 
@@ -473,7 +481,7 @@ export default async function PulsePage() {
 
                     {/* HIGHEST CONVICTION PICK */}
                     {highestConviction && (
-                        <div style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+                        <div className="pulse-bento-card" style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
                             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Highest Conviction</h2>
                             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>The upcoming match the crowd is most certain about.</p>
 
@@ -501,7 +509,7 @@ export default async function PulsePage() {
 
                     {/* THE SNOOZEFEST (swapped to this row) */}
                     {snoozeFest && (
-                        <div style={{ background: 'linear-gradient(145deg, #1c2e4a 0%, var(--surface2) 100%)', borderRadius: 20, padding: 24, border: '1px solid rgba(66, 165, 245, 0.3)' }}>
+                        <div className="pulse-bento-card" style={{ background: 'linear-gradient(145deg, #1c2e4a 0%, var(--surface2) 100%)', borderRadius: 20, padding: 24, border: '1px solid rgba(66, 165, 245, 0.3)' }}>
                             <h2 style={{ fontSize: 13, fontWeight: 700, color: '#90caf9', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>🧊 The Snoozefest</h2>
                             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>Highest percentage of 0-0 predictions.</p>
 
@@ -524,7 +532,7 @@ export default async function PulsePage() {
 
                     {/* THE GOAL FEST */}
                     {goalFest && (
-                        <div style={{ background: 'linear-gradient(145deg, #4a1c1c 0%, var(--surface2) 100%)', borderRadius: 20, padding: 24, border: '1px solid rgba(229, 57, 53, 0.3)' }}>
+                        <div className="pulse-bento-card" style={{ background: 'linear-gradient(145deg, #4a1c1c 0%, var(--surface2) 100%)', borderRadius: 20, padding: 24, border: '1px solid rgba(229, 57, 53, 0.3)' }}>
                             <h2 style={{ fontSize: 13, fontWeight: 700, color: '#ff8a80', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>🔥 The Goal Fest</h2>
                             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>Highest predicted average goals.</p>
 
@@ -550,7 +558,7 @@ export default async function PulsePage() {
 
                     {/* MOST POLARIZING MATCH (moved here) */}
                     {mostPolarizing && (
-                        <div style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
+                        <div className="pulse-bento-card" style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
                             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Most Polarizing</h2>
                             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>The most fiercely debated upcoming match.</p>
 
@@ -573,7 +581,7 @@ export default async function PulsePage() {
                                 <div style={{ width: `${mostPolarizing.ap}%`, background: '#e53935' }}></div>
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600 }}>
+                            <div className="pulse-polar-bar" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600 }}>
                                 <span style={{ color: 'var(--gold)' }}>{Math.round(mostPolarizing.hp)}% H</span>
                                 <span style={{ color: 'var(--dim)' }}>{Math.round(mostPolarizing.dp)}% D</span>
                                 <span style={{ color: '#e53935' }}>{Math.round(mostPolarizing.ap)}% A</span>
@@ -583,11 +591,11 @@ export default async function PulsePage() {
 
                     {/* BIGGEST CROWD UPSET */}
                     {biggestUpset && (
-                        <div style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)', gridColumn: 'span 2' }}>
+                        <div className="pulse-bento-card pulse-bento-span-2" style={{ background: 'var(--surface2)', borderRadius: 20, padding: 24, border: '1px solid var(--border)' }}>
                             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Biggest Crowd Upset</h2>
                             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>The finished match that shocked the platform.</p>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 24, background: 'var(--black)', padding: '16px 24px', borderRadius: 16, border: '1px solid var(--border)' }}>
+                            <div className="resp-upset-row" style={{ display: 'flex', alignItems: 'center', gap: 24, background: 'var(--black)', padding: '16px 24px', borderRadius: 16, border: '1px solid var(--border)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                     <img src={getFlagUrl(biggestUpset.match.home_team)} width={32} height={24} alt="home" style={{ borderRadius: 4 }} />
                                     <div style={{ fontSize: 24, fontFamily: 'Bebas Neue', color: 'var(--cream)', letterSpacing: 1 }}>{biggestUpset.realHomeScore} - {biggestUpset.realAwayScore}</div>

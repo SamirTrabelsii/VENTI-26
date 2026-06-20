@@ -143,4 +143,146 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
     -moz-appearance: textfield;
+}
+
+.pulse-bento-span-2 { grid-column: span 2; }
+
+/* ── Responsive Utilities ── */
+@media (max-width: 768px) {
+    .resp-grid-stack {
+        grid-template-columns: 1fr !important;
+    }
+    .resp-flex-stack {
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+    }
+    .resp-hero-title {
+        font-size: 48px !important;
+    }
+    .resp-hero-avatar {
+        width: 80px !important;
+        height: 80px !important;
+    }
+    .resp-padding {
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
+    .match-card {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 16px !important;
+        background: var(--surface3) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+    }
+    .match-card-header {
+        display: none !important;
+    }
+    .desktop-only {
+        display: none !important;
+    }
+    .match-card-mobile-only {
+        display: flex !important;
+        width: 100% !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+    .match-card-mobile-header {
+        font-size: 11px !important;
+        color: var(--muted) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+        padding-bottom: 8px !important;
+    }
+    .match-card-mobile-teams {
+        justify-content: center !important;
+        gap: 16px !important;
+        font-size: 24px !important;
+        font-family: 'Bebas Neue', sans-serif !important;
+        letter-spacing: 1px !important;
+        margin: 8px 0 !important;
+    }
+    .match-card-mobile-footer {
+        background: rgba(0,0,0,0.2) !important;
+        padding: 10px 12px !important;
+        border-radius: 8px !important;
+        margin-top: 4px !important;
+    }
+    .resp-match-row-header {
+        display: none !important;
+    }
+    .resp-podium {
+        flex-wrap: wrap !important;
+    }
+    .resp-bento-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .resp-upset-row {
+        flex-direction: column !important;
+        text-align: center !important;
+    }
+    .resp-upset-row > div:nth-child(2) {
+        width: 100% !important;
+        height: 1px !important;
+    }
+
+    .pulse-bento-span-2 { grid-column: auto !important; }
+    
+    /* ── Pulse Mobile Utilities ── */
+    .pulse-hero-title { font-size: 44px !important; }
+    .pulse-hero-sub { font-size: 14px !important; }
+    
+    .pulse-podium {
+        flex-direction: row !important;
+        align-items: flex-end !important;
+        justify-content: center !important;
+        gap: 8px !important;
+    }
+    .pulse-podium-1 { width: 110px !important; order: 2 !important; flex-direction: column !important; background: transparent !important; border-radius: 0 !important; padding: 0 !important; }
+    .pulse-podium-2 { width: 90px !important; order: 1 !important; flex-direction: column !important; background: transparent !important; border-radius: 0 !important; padding: 0 !important; }
+    .pulse-podium-3 { width: 90px !important; order: 3 !important; flex-direction: column !important; background: transparent !important; border-radius: 0 !important; padding: 0 !important; }
+    
+    .pulse-podium-block { display: flex !important; } 
+    .pulse-podium-badge { display: none !important; }
+    .pulse-podium-info { text-align: center !important; flex: none !important; padding-left: 0 !important; }
+    .pulse-podium-img { margin-bottom: 8px !important; width: 36px !important; height: auto !important; }
+    
+    /* Scale down the blocks and fonts */
+    .pulse-podium-1 .pulse-podium-block { height: 80px !important; font-size: 28px !important; }
+    .pulse-podium-2 .pulse-podium-block { height: 60px !important; font-size: 24px !important; }
+    .pulse-podium-3 .pulse-podium-block { height: 40px !important; font-size: 20px !important; }
+    
+    .pulse-podium-1 .pulse-podium-info div:first-child { font-size: 13px !important; }
+    .pulse-podium-1 .pulse-podium-info div:last-child { font-size: 18px !important; }
+    .pulse-podium-2 .pulse-podium-info div:first-child, .pulse-podium-3 .pulse-podium-info div:first-child { font-size: 11px !important; }
+    .pulse-podium-2 .pulse-podium-info div:last-child, .pulse-podium-3 .pulse-podium-info div:last-child { font-size: 14px !important; }
+    
+    .pulse-runnerups { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+    .pulse-runnerup-item { background: var(--surface3); padding: 12px; border-radius: 8px; justify-content: space-between !important; }
+    
+    .pulse-golden4 {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px !important;
+    }
+    .pulse-golden4-item {
+        width: 100% !important;
+        padding: 12px !important;
+    }
+    .pulse-bento-card {
+        padding: 16px !important;
+    }
+    .pulse-lethal-row {
+        gap: 8px !important;
+    }
+    .pulse-lethal-stats {
+        gap: 8px !important;
+    }
+    .pulse-polar-bar {
+        font-size: 10px !important;
+    }
 }
