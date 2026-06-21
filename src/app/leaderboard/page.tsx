@@ -1,13 +1,98 @@
 import { createClient } from '@/lib/supabase/server'
-import { GROUP_MATCHES, getRobohashUrl } from '@/lib/wc2026-data'
+import { GROUP_MATCHES } from '@/lib/wc2026-data'
 import Nav from '@/components/Nav'
-import { redirect } from 'next/navigation'
 import LeaderboardClient, { LeaderboardUser } from './LeaderboardClient'
 import { fetchAllRows } from '@/lib/supabase/pagination'
+import { scoreMatch } from '@/lib/scoring'
 
 const GROUP_TOTAL = GROUP_MATCHES.length   // 72
 const KNOCKOUT_TOTAL = 32                  // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
 const TOTAL_MATCHES = GROUP_TOTAL + KNOCKOUT_TOTAL  // 104
+
+function isKnockoutMatch(match: any) {
+    return match.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage) : false
+}
+
+function matchIdForPick(pick: any) {
+    if (pick.round === 'final' || pick.round === 'third_place') return pick.round
+    return `${pick.round}_${pick.slot_index + 1}`
+}
+
+function computeFreshScores(
+    userIds: string[],
+    finishedMatches: any[],
+    predictions: any[],
+    bracketPicks: any[],
+    bracketBonusByUser: Map<string, number>,
+) {
+    const predictionByUserMatch = new Map<string, any>()
+    for (const p of predictions) predictionByUserMatch.set(`${p.user_id}:${p.match_id}`, p)
+    for (const bp of bracketPicks) {
+        const matchId = matchIdForPick(bp)
+        predictionByUserMatch.set(`${bp.user_id}:${matchId}`, {
+            ...bp,
+            match_id: matchId,
+            qualifier_pick: bp.team_code,
+        })
+    }
+
+    const totals = new Map<string, { total_points: number; exact_scores: number; correct_results: number; streak: number }>()
+
+    for (const userId of userIds) {
+        let total_points = bracketBonusByUser.get(userId) ?? 0
+        let exact_scores = 0
+        let correct_results = 0
+        let streak = 0
+
+        for (const match of finishedMatches) {
+            const prediction = predictionByUserMatch.get(`${userId}:${match.id}`)
+            if (!prediction) {
+                streak = 0
+                continue
+            }
+
+            const predHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number'
+                ? prediction.original_home_score
+                : prediction.home_score
+            const predAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number'
+                ? prediction.original_away_score
+                : prediction.away_score
+
+            if (typeof predHome !== 'number' || typeof predAway !== 'number') {
+                streak = 0
+                continue
+            }
+
+            const isKnockout = isKnockoutMatch(match)
+            const isFixtureCorrect = !isKnockout ||
+                !prediction.predicted_home_team ||
+                !prediction.predicted_away_team ||
+                (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
+
+            const result = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, {
+                predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
+                realQualifier: match.qualifier || null,
+                isRepredicted: !!prediction.is_repredicted,
+                multiplier: match.multiplier || 1,
+                isFixtureCorrect,
+            })
+
+            total_points += result.total
+
+            if (result.type === 'exact') exact_scores++
+            if (['exact', 'correct', 'goal_diff'].includes(result.type)) {
+                correct_results++
+                streak++
+            } else {
+                streak = 0
+            }
+        }
+
+        totals.set(userId, { total_points, exact_scores, correct_results, streak })
+    }
+
+    return totals
+}
 
 
 
@@ -27,39 +112,45 @@ export default async function LeaderboardPage() {
         supabase.from('profiles').select('id, display_name, avatar_initials, avatar_color').order('created_at', { ascending: true })
     )
 
-    // 2. Fetch scores (deduplicated per user — take MAX across all group rows)
-    const scoresData = await fetchAllRows(
-        supabase.from('scores').select('user_id, total_points, exact_scores, correct_results, streak').order('total_points', { ascending: false })
-    )
-
-    const scoresMap = new Map<string, { total_points: number, exact_scores: number, correct_results: number, streak: number }>()
-    for (const row of (scoresData || [])) {
-        const existing = scoresMap.get(row.user_id)
-        if (!existing || row.total_points > existing.total_points) {
-            scoresMap.set(row.user_id, {
-                total_points: row.total_points,
-                exact_scores: row.exact_scores,
-                correct_results: row.correct_results,
-                streak: row.streak,
-            })
-        }
-    }
+    // 2. Fetch raw prediction data and recompute totals instead of trusting cached scores.
+    const [groupPredData, bracketPredData, scoresData, finishedMatchesData] = await Promise.all([
+        fetchAllRows(supabase.from('predictions').select('*')),
+        fetchAllRows(supabase.from('bracket_picks').select('*')),
+        fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points')),
+        fetchAllRows(supabase.from('matches').select('*').eq('status', 'finished')),
+    ])
 
 
 
     // 3. Fetch group prediction counts per user
-    const groupPredData = await fetchAllRows(supabase.from('predictions').select('user_id'))
     const groupPredCounts = new Map<string, number>()
     for (const row of groupPredData) {
         groupPredCounts.set(row.user_id, (groupPredCounts.get(row.user_id) ?? 0) + 1)
     }
 
     // 4. Fetch bracket prediction counts per user
-    const bracketPredData = await fetchAllRows(supabase.from('bracket_picks').select('user_id'))
     const bracketPredCounts = new Map<string, number>()
     for (const row of bracketPredData) {
         bracketPredCounts.set(row.user_id, (bracketPredCounts.get(row.user_id) ?? 0) + 1)
     }
+
+    const bracketBonusByUser = new Map<string, number>()
+    for (const row of scoresData) {
+        const current = bracketBonusByUser.get(row.user_id) ?? 0
+        bracketBonusByUser.set(row.user_id, Math.max(current, row.bracket_bonus_points ?? 0))
+    }
+
+    const finishedMatches = finishedMatchesData
+        .filter((m: any) => m.home_score !== null && m.away_score !== null)
+        .sort((a: any, b: any) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+
+    const scoresMap = computeFreshScores(
+        (allProfiles || []).map(p => p.id),
+        finishedMatches,
+        groupPredData,
+        bracketPredData,
+        bracketBonusByUser,
+    )
 
     // 5. Build unified leaderboard with all users
     const leaderboard: LeaderboardUser[] = (allProfiles || []).map(p => {

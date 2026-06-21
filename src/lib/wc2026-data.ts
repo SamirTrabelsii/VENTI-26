@@ -73,6 +73,8 @@ export interface MatchData {
     venue: string
     city: string
     api_id: string // The real API id from worldcup26.ir
+    qualifier?: string | null
+    multiplier?: number | null
 }
 
 export const GROUP_MATCHES: MatchData[] = [

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +35,7 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
     const router = useRouter()
     const [currentLeaderboard, setCurrentLeaderboard] = useState<LeaderboardUser[]>(initialLeaderboard)
     const [liveMatches, setLiveMatches] = useState<any[]>(initialLiveMatches)
+    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         setCurrentLeaderboard(initialLeaderboard)
@@ -58,22 +59,17 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
 
     useEffect(() => {
         const supabase = createClient()
+        const scheduleRefresh = () => {
+            if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+            refreshTimerRef.current = setTimeout(() => router.refresh(), 400)
+        }
+
         const channel = supabase.channel('leaderboard_realtime')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'scores' }, (payload) => {
-                setCurrentLeaderboard(prev => prev.map(u => {
-                    if (u.id === payload.new.user_id) {
-                        return {
-                            ...u,
-                            total_points: payload.new.total_points,
-                            exact_scores: payload.new.exact_scores,
-                            correct_results: payload.new.correct_results,
-                            streak: payload.new.streak,
-                        }
-                    }
-                    return u
-                }))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, () => {
+                scheduleRefresh()
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+                if (payload.new.status === 'finished') scheduleRefresh()
                 setLiveMatches(prev => {
                     const matchIdx = prev.findIndex(m => m.id === payload.new.id)
                     if (payload.new.status === 'live') {
@@ -92,8 +88,11 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
             })
             .subscribe()
 
-        return () => { supabase.removeChannel(channel) }
-    }, [])
+        return () => {
+            if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+            supabase.removeChannel(channel)
+        }
+    }, [router])
 
     const dynamicLeaderboard = useMemo(() => {
         const mapped = currentLeaderboard.map(user => {
