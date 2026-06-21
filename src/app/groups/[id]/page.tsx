@@ -4,9 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase/client'
-import { getRobohashUrl, GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
-
-const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+import { getRobohashUrl } from '@/lib/wc2026-data'
 
 interface MemberScore {
     user_id: string
@@ -71,40 +69,11 @@ export default function GroupDetailPage() {
         if (!g) { router.push('/groups'); return }
         setGroup(g)
 
-        // All members with their profiles
-        const { data: members } = await supabase
-            .from('group_members')
-            .select('user_id, joined_at, profiles(display_name)')
-            .eq('group_id', id)
+        const res = await fetch(`/api/groups/${id}/scores`, { cache: 'no-store' })
+        if (!res.ok) { router.push('/groups'); return }
 
-        if (!members) return
-
-        // Scores (may not exist for everyone yet)
-        const { data: scoreRows } = await supabase
-            .from('scores')
-            .select('user_id, total_points, exact_scores, correct_results, streak')
-            .eq('group_id', id)
-
-        const scoreMap = new Map(scoreRows?.map(s => [s.user_id, s]) ?? [])
-
-        // Merge members + scores
-        const merged: MemberScore[] = members.map(m => {
-            const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
-            const s = scoreMap.get(m.user_id)
-            return {
-                user_id: m.user_id,
-                display_name: (p as { display_name?: string } | null)?.display_name ?? 'Player',
-                joined_at: m.joined_at,
-                total_points: s?.total_points ?? 0,
-                exact_scores: s?.exact_scores ?? 0,
-                correct_results: s?.correct_results ?? 0,
-                streak: s?.streak ?? 0,
-            }
-        })
-
-        // Sort by points descending
-        merged.sort((a, b) => b.total_points - a.total_points)
-        setScores(merged)
+        const fresh = await res.json()
+        setScores(fresh.scores ?? [])
 
     }, [id, supabase, router])
 
@@ -130,6 +99,7 @@ export default function GroupDetailPage() {
     // Real-time scores subscription
     useEffect(() => {
         if (!userId) return
+        const refreshInterval = setInterval(() => load(userId), 60_000)
         const channel = supabase
             .channel(`group-scores-${id}`)
             .on('postgres_changes', {
@@ -137,7 +107,10 @@ export default function GroupDetailPage() {
                 filter: `group_id=eq.${id}`,
             }, () => { load(userId) })
             .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        return () => {
+            clearInterval(refreshInterval)
+            supabase.removeChannel(channel)
+        }
     }, [userId, id, load, supabase])
 
     const leaveGroup = async () => {
@@ -157,7 +130,7 @@ export default function GroupDetailPage() {
         return scores.map(user => ({
             ...user,
             display_points: user.total_points,
-            live_bonus: 0,
+            live_bonus: user.live_bonus ?? 0,
             dynamic_streak: user.streak,
             dynamic_exact: user.exact_scores,
             dynamic_correct: user.correct_results

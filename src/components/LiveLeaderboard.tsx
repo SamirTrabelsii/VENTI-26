@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Score } from '@/types'
 import { getRobohashUrl } from '@/lib/wc2026-data'
@@ -12,47 +12,53 @@ interface Props {
 
 export default function LiveLeaderboard({ groupId, currentUserId, initialScores = [] }: Props) {
     const [scores, setScores] = useState<Score[]>(initialScores)
+    const scoresRef = useRef<Score[]>(initialScores)
     const [prevScores, setPrevScores] = useState<Record<string, number>>({})
     const [justUpdated, setJustUpdated] = useState<string | null>(null)
     const [supabase] = useState(() => createClient())
 
     useEffect(() => {
-        // Load fresh scores
+        scoresRef.current = scores
+    }, [scores])
+
+    useEffect(() => {
         const load = async () => {
-            const { data } = await supabase
-                .from('scores')
-                .select('*, profile:profiles(display_name, avatar_initials, avatar_color, email)')
-                .eq('group_id', groupId)
-                .order('total_points', { ascending: false })
-            if (data) setScores(data)
+            const res = await fetch(`/api/groups/${groupId}/scores`, { cache: 'no-store' })
+            if (!res.ok) return
+
+            const data = await res.json()
+            const freshScores = data.scores ?? []
+            const changed = freshScores.find((fresh: Score) => {
+                const old = scoresRef.current.find(s => s.user_id === fresh.user_id)
+                return old && old.total_points !== fresh.total_points
+            })
+
+            if (changed) {
+                const old = scoresRef.current.find(s => s.user_id === changed.user_id)
+                if (old) setPrevScores(p => ({ ...p, [changed.user_id]: old.total_points }))
+                setJustUpdated(changed.user_id)
+                setTimeout(() => setJustUpdated(null), 3000)
+            }
+
+            scoresRef.current = freshScores
+            setScores(freshScores)
         }
         load()
+        const refreshInterval = setInterval(load, 60_000)
 
-        // Subscribe to real-time score changes
         const channel = supabase
             .channel(`scores-${groupId}`)
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'scores', filter: `group_id=eq.${groupId}` },
-                (payload: { new: Record<string, unknown> }) => {
-                    const updated = payload.new as unknown as Score
-                    setScores(prev => {
-                        const oldScore = prev.find(s => s.user_id === updated.user_id)
-                        if (oldScore) {
-                            setPrevScores(p => ({ ...p, [updated.user_id]: oldScore.total_points }))
-                            setJustUpdated(updated.user_id)
-                            setTimeout(() => setJustUpdated(null), 3000)
-                        }
-                        const next = prev
-                            .map(s => s.user_id === updated.user_id ? { ...s, ...updated } : s)
-                            .sort((a, b) => b.total_points - a.total_points)
-                        return next
-                    })
-                }
+                () => { load() }
             )
             .subscribe()
 
-        return () => { supabase.removeChannel(channel) }
+        return () => {
+            clearInterval(refreshInterval)
+            supabase.removeChannel(channel)
+        }
     }, [groupId, supabase])
 
     const RANK_COLORS = ['#d4a843', '#b0b8c8', '#cd7f32']

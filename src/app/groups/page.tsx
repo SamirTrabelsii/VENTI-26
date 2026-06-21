@@ -15,6 +15,13 @@ interface GroupWithMeta extends Group {
     members_preview: { display_name: string }[]
 }
 
+interface FreshGroupScore {
+    user_id: string
+    display_name?: string
+    total_points: number
+    profile?: { display_name?: string }
+}
+
 const S: Record<string, React.CSSProperties> = {
     input: {
         width: '100%', padding: '12px 14px', borderRadius: 12,
@@ -113,49 +120,23 @@ export default function GroupsPage() {
         // For each group, load member count + scores enriched
         const enriched: GroupWithMeta[] = await Promise.all(
             rawGroups.map(async g => {
-                // Member count
-                const { count } = await supabase
-                    .from('group_members')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('group_id', g.id)
-
-                // Fetch ALL scores for this group (not limited) so rank is accurate
-                const { data: scores } = await supabase
-                    .from('scores')
-                    .select('user_id, total_points, profile:profiles(display_name)')
-                    .eq('group_id', g.id)
-                    .order('total_points', { ascending: false })
-
-                const allScores = scores ?? []
+                const res = await fetch(`/api/groups/${g.id}/scores`, { cache: 'no-store' })
+                const fresh = res.ok ? await res.json() : { scores: [], member_count: 0, members_preview: [] }
+                const allScores: FreshGroupScore[] = fresh.scores ?? []
                 const myScoreRow = allScores.find(s => s.user_id === uid)
                 const myRank = myScoreRow
                     ? allScores.findIndex(s => s.user_id === uid) + 1
                     : null
                 const leader = allScores[0]
-                const leaderProfile = Array.isArray(leader?.profile) ? leader.profile[0] : leader?.profile
-
-                // Members preview for avatars
-                const { data: members } = await supabase
-                    .from('group_members')
-                    .select('profiles(display_name)')
-                    .eq('group_id', g.id)
-                    .limit(5)
-
-                const membersPreview = members
-                    ?.map(m => {
-                        const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
-                        const profile = p as { display_name?: string } | null
-                        return { display_name: profile?.display_name ?? '?' }
-                    }) ?? []
 
                 return {
                     ...g,
-                    member_count: count ?? 0,
+                    member_count: fresh.member_count ?? allScores.length,
                     my_rank: myRank || null,
                     my_points: myScoreRow?.total_points ?? null,
-                    leader_name: leaderProfile?.display_name ?? null,
+                    leader_name: leader?.display_name ?? leader?.profile?.display_name ?? null,
                     leader_points: leader?.total_points ?? null,
-                    members_preview: membersPreview,
+                    members_preview: fresh.members_preview ?? [],
                 }
             })
         )
@@ -164,6 +145,8 @@ export default function GroupsPage() {
     }, [supabase])
 
     useEffect(() => {
+        let refreshInterval: ReturnType<typeof setInterval> | undefined
+
         const init = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) { router.push('/auth/login'); return }
@@ -172,10 +155,14 @@ export default function GroupsPage() {
                 .from('profiles').select('*').eq('id', user.id).single()
             setProfile(p)
             await loadGroups(user.id)
+            refreshInterval = setInterval(() => loadGroups(user.id), 60_000)
             setPageLoading(false)
         }
         init()
-    }, [])
+        return () => {
+            if (refreshInterval) clearInterval(refreshInterval)
+        }
+    }, [loadGroups, router, supabase])
 
     const createGroup = async () => {
         if (!groupName.trim() || !userId) return
