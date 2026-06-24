@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Prediction, BracketPick as RawBracketPick } from '@/types'
 import AuthModal from '@/components/AuthModal'
-import { isGlobalLockPassed } from '@/lib/wc2026-data'
+import { isGlobalLockPassed, isGroupMatchStarted } from '@/lib/wc2026-data'
 
 const GUEST_STORAGE_KEY = 'venti26_guest_predictions'
 
@@ -163,6 +163,8 @@ export function PredictionProvider({
 
     const setGroupScore = useCallback((matchId: string, home: number | '', away: number | '') => {
         if (isLocked) return
+        // Even if globally unlocked, don't allow editing matches whose kickoff has passed
+        if (isGroupMatchStarted(matchId)) return
 
         setHasUnsavedChanges(true)
 
@@ -203,6 +205,8 @@ export function PredictionProvider({
             const groupUpserts = Object.keys(currentGroupScores)
                 .filter(matchId => {
                     const s = currentGroupScores[matchId]
+                    // Skip matches whose kickoff has passed — backend would reject anyway
+                    if (isGroupMatchStarted(matchId)) return false
                     return (
                         s &&
                         s.home !== null &&

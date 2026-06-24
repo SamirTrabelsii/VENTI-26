@@ -1477,6 +1477,18 @@ export function isGlobalLockPassed(): boolean {
     return getTournamentPhase() !== 'PRE_TOURNAMENT'
 }
 
+/** Returns true if the match's kickoff time has already passed (game started or finished). */
+export function hasKickoffPassed(kickoff: string): boolean {
+    return new Date() >= new Date(kickoff)
+}
+
+/** Look up a GROUP_MATCHES entry by match id and check if its kickoff has passed. */
+export function isGroupMatchStarted(matchId: string): boolean {
+    const match = GROUP_MATCHES.find(m => m.id === matchId)
+    if (!match) return false
+    return hasKickoffPassed(match.kickoff)
+}
+
 export function getAdjustedKickoff(utcString: string): Date {
     return new Date(utcString)
 }

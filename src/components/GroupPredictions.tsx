@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import MatchCard from '@/components/MatchCard'
 import type { MatchData } from '@/lib/wc2026-data'
-import { getTeam } from '@/lib/wc2026-data'
+import { getTeam, hasKickoffPassed } from '@/lib/wc2026-data'
 import type { Prediction } from '@/types'
 import { usePredictions } from '@/components/PredictionContext'
 import TeamFlag from '@/components/TeamFlag'
@@ -88,6 +88,9 @@ const GroupPredictions = memo(function GroupPredictions({ activeMatches, userId,
         <div>
             {activeMatches.map((match) => {
                 const s = groupScores[match.id] || { home: '', away: '' }
+                // Lock this specific match if either globally locked OR its kickoff has passed
+                // (prevents unlocked users from re-predicting finished/live games)
+                const matchDisabled = isLocked || hasKickoffPassed(match.kickoff)
                 return (
                     <MatchCard
                         key={match.id}
@@ -98,7 +101,7 @@ const GroupPredictions = memo(function GroupPredictions({ activeMatches, userId,
                         localAway={s.away}
                         onChange={(home, away) => handleScoreChange(match.id, home, away)}
                         hideSaveButton
-                        disabled={isLocked}
+                        disabled={matchDisabled}
                     />
                 )
             })}

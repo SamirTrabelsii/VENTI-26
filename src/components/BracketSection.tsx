@@ -290,8 +290,8 @@ export default function BracketSection() {
 
     const canEditSlot = useCallback((round: Round, slotIndex: number, slot?: Slot) => {
         if (viewMode === 'original') {
-            // Allow editing if: pre-tournament OR user has been personally unlocked
-            return phase === 'PRE_TOURNAMENT' || !isLocked
+            // Original bracket is locked once tournament starts, even for unlocked users
+            return phase === 'PRE_TOURNAMENT'
         }
 
         return phase === 'KNOCKOUT_OPEN' && hasKnownFixture(slot) && !hasKickoffPassed(round, slotIndex)
