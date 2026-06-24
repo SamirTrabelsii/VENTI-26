@@ -482,33 +482,23 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
             {/* Floating Jump to Latest Button */}
             <button
                 onClick={scrollToLastPlayed}
-                className="fixed bottom-[90px] right-4 md:bottom-8 md:right-8 z-40"
+                className="fixed bottom-[90px] right-4 md:bottom-8 md:right-8 z-50 flex items-center gap-2 group hover:scale-105 transition-all duration-300"
                 style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '16px 24px', borderRadius: '32px',
-                    background: 'var(--gold)', color: '#000', 
-                    fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.5,
-                    boxShadow: '0 4px 12px rgba(212,168,67,0.15), inset 0 -3px 0 rgba(0,0,0,0.15)',
-                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    backdropFilter: 'blur(8px)',
-                }}
-                onMouseEnter={e => { 
-                    e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)'; 
-                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(212,168,67,0.25), inset 0 -3px 0 rgba(0,0,0,0.1)' 
-                }}
-                onMouseLeave={e => { 
-                    e.currentTarget.style.transform = 'translateY(0) scale(1)'; 
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(212,168,67,0.15), inset 0 -3px 0 rgba(0,0,0,0.15)' 
-                }}
-                onMouseDown={e => { 
-                    e.currentTarget.style.transform = 'translateY(2px) scale(0.98)'; 
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(212,168,67,0.2)' 
-                }}
-                onMouseUp={e => { 
-                    e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)' 
+                    padding: '12px 24px',
+                    borderRadius: '100px',
+                    background: 'linear-gradient(135deg, rgba(212,168,67,0.15) 0%, rgba(212,168,67,0.05) 100%)',
+                    border: '1px solid var(--border-gold)',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.5), 0 0 20px rgba(212,168,67,0.2)',
+                    backdropFilter: 'blur(10px)',
+                    color: 'var(--gold)',
+                    fontWeight: 700,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    fontSize: 12,
+                    cursor: 'pointer'
                 }}
             >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.3s' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-y-1 transition-transform duration-300">
                     <path d="M12 5v14M19 12l-7 7-7-7"/>
                 </svg>
                 Today
