@@ -1,13 +1,76 @@
 import { createClient } from '@/lib/supabase/server'
-import { GROUP_MATCHES } from '@/lib/wc2026-data'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 import Nav from '@/components/Nav'
 import LeaderboardClient, { LeaderboardUser } from './LeaderboardClient'
 import { fetchAllRows } from '@/lib/supabase/pagination'
-import { computeFreshScores } from '@/lib/fresh-scores'
+import { computeFreshScores, normalizeBracketPickForScoring } from '@/lib/fresh-scores'
 
 const GROUP_TOTAL = GROUP_MATCHES.length   // 72
 const KNOCKOUT_TOTAL = 32                  // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
 const TOTAL_MATCHES = GROUP_TOTAL + KNOCKOUT_TOTAL  // 104
+const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+
+const TEAM_NAME_TO_CODE: Record<string, string> = {
+    'Mexico': 'MEX', 'South Africa': 'RSA', 'Korea Republic': 'KOR', 'South Korea': 'KOR',
+    'Czechia': 'CZE', 'Czech Republic': 'CZE', 'Canada': 'CAN', 'Bosnia-Herzegovina': 'BIH',
+    'Bosnia and Herzegovina': 'BIH', 'United States': 'USA', 'Paraguay': 'PAR', 'Qatar': 'QAT',
+    'Switzerland': 'SUI', 'Brazil': 'BRA', 'Morocco': 'MAR', 'Haiti': 'HAI', 'Scotland': 'SCO',
+    'Australia': 'AUS', 'Turkey': 'TUR', 'Germany': 'GER', 'Curacao': 'CUW', 'Netherlands': 'NED',
+    'Japan': 'JPN', 'Ivory Coast': 'CIV', 'Ecuador': 'ECU', 'Sweden': 'SWE', 'Tunisia': 'TUN',
+    'Spain': 'ESP', 'Cape Verde Islands': 'CPV', 'Cape Verde': 'CPV', 'Belgium': 'BEL',
+    'Egypt': 'EGY', 'Saudi Arabia': 'KSA', 'Uruguay': 'URU', 'Iran': 'IRN', 'New Zealand': 'NZL',
+    'France': 'FRA', 'Senegal': 'SEN', 'Iraq': 'IRQ', 'Norway': 'NOR', 'Argentina': 'ARG',
+    'Algeria': 'ALG', 'Austria': 'AUT', 'Jordan': 'JOR', 'Portugal': 'POR', 'DR Congo': 'COD',
+    'Democratic Republic of the Congo': 'COD', 'Uzbekistan': 'UZB', 'Colombia': 'COL',
+    'England': 'ENG', 'Croatia': 'CRO', 'Ghana': 'GHA', 'Panama': 'PAN',
+}
+
+function isGroupStageLabel(groupLabel?: string | null) {
+    return !groupLabel || !['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
+}
+
+async function fetchApiFinishedMatches(dbMatches: any[]) {
+    try {
+        const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+            headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY ?? '' },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(4500),
+        })
+        if (!res.ok) return []
+
+        const data = await res.json()
+        const finished: any[] = []
+
+        for (const apiMatch of data.matches ?? []) {
+            if (apiMatch.status !== 'FINISHED') continue
+
+            const homeCode = TEAM_NAME_TO_CODE[apiMatch.homeTeam?.name] || apiMatch.homeTeam?.tla
+            const awayCode = TEAM_NAME_TO_CODE[apiMatch.awayTeam?.name] || apiMatch.awayTeam?.tla
+            const homeScore = apiMatch.score?.fullTime?.home
+            const awayScore = apiMatch.score?.fullTime?.away
+            if (!homeCode || !awayCode || typeof homeScore !== 'number' || typeof awayScore !== 'number') continue
+
+            const staticMatch = ALL_MATCHES.find(m => m.home_team === homeCode && m.away_team === awayCode)
+            if (!staticMatch) continue
+
+            const dbMatch = dbMatches.find((m: any) => m.home_team === homeCode && m.away_team === awayCode)
+
+            finished.push({
+                ...staticMatch,
+                stage: dbMatch?.stage ?? (isGroupStageLabel(staticMatch.group_label) ? 'group' : staticMatch.group_label),
+                qualifier: dbMatch?.qualifier ?? staticMatch.qualifier ?? null,
+                multiplier: dbMatch?.multiplier ?? staticMatch.multiplier ?? 1,
+                home_score: homeScore,
+                away_score: awayScore,
+                status: 'finished',
+            })
+        }
+
+        return finished
+    } catch {
+        return []
+    }
+}
 
 export default async function LeaderboardPage() {
     const supabase = await createClient()
@@ -26,11 +89,11 @@ export default async function LeaderboardPage() {
     )
 
     // 2. Fetch raw prediction data and recompute totals instead of trusting cached scores.
-    const [groupPredData, bracketPredData, scoresData, finishedMatchesData] = await Promise.all([
+    const [groupPredData, bracketPredData, scoresData, matchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*')),
         fetchAllRows(supabase.from('bracket_picks').select('*')),
         fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points')),
-        fetchAllRows(supabase.from('matches').select('*').eq('status', 'finished')),
+        fetchAllRows(supabase.from('matches').select('*')),
     ])
 
 
@@ -53,7 +116,17 @@ export default async function LeaderboardPage() {
         bracketBonusByUser.set(row.user_id, Math.max(current, row.bracket_bonus_points ?? 0))
     }
 
-    const finishedMatches = finishedMatchesData
+    const dbFinishedMatches = matchesData
+        .filter((m: any) => m.status === 'finished' && m.home_score !== null && m.away_score !== null)
+
+    const apiFinishedMatches = await fetchApiFinishedMatches(matchesData)
+    const apiFinishedIds = new Set(apiFinishedMatches.map((m: any) => m.id))
+    const effectiveFinishedMatches = [
+        ...apiFinishedMatches,
+        ...dbFinishedMatches.filter((m: any) => !apiFinishedIds.has(m.id)),
+    ]
+
+    const finishedMatches = effectiveFinishedMatches
         .filter((m: any) => m.home_score !== null && m.away_score !== null)
         .sort((a: any, b: any) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
 
@@ -87,7 +160,9 @@ export default async function LeaderboardPage() {
 
     const initials = profile?.avatar_initials ?? 'PL'
 
-    // 6. Fetch live matches and predictions for those matches to calculate live points
+    // 6. Fetch non-finished match candidates near/past kickoff. The client
+    // verifies external status before applying temporary points, so stale DB
+    // rows cannot create fake live labels.
     const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     const liveMatches = await fetchAllRows(
         supabase.from('matches')
@@ -98,7 +173,15 @@ export default async function LeaderboardPage() {
 
     let livePredictions: any[] = []
     if (liveMatches.length > 0) {
-        livePredictions = await fetchAllRows(supabase.from('predictions').select('*').in('match_id', liveMatches.map((m: any) => m.id)))
+        const liveMatchIds = new Set(liveMatches.map((m: any) => m.id))
+        const liveGroupPredictions = await fetchAllRows(
+            supabase.from('predictions').select('*').in('match_id', Array.from(liveMatchIds))
+        )
+        const liveBracketPredictions = bracketPredData
+            .map(normalizeBracketPickForScoring)
+            .filter((p: any) => liveMatchIds.has(p.match_id))
+
+        livePredictions = [...liveGroupPredictions, ...liveBracketPredictions]
     }
 
     return (
@@ -118,6 +201,7 @@ export default async function LeaderboardPage() {
                 <LeaderboardClient
                     initialLeaderboard={leaderboard}
                     initialLiveMatches={liveMatches}
+                    initialScoredMatchIds={finishedMatches.map((m: any) => m.id)}
                     livePredictions={livePredictions}
                     currentUserId={user?.id}
                 />

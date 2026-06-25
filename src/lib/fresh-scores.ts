@@ -11,9 +11,18 @@ function isKnockoutMatch(match: any) {
     return match.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage) : false
 }
 
-function matchIdForPick(pick: any) {
+export function matchIdForPick(pick: any) {
     if (pick.round === 'final' || pick.round === 'third_place') return pick.round
     return `${pick.round}_${pick.slot_index + 1}`
+}
+
+export function normalizeBracketPickForScoring(pick: any) {
+    const matchId = matchIdForPick(pick)
+    return {
+        ...pick,
+        match_id: matchId,
+        qualifier_pick: pick.team_code,
+    }
 }
 
 export function computeFreshScores(
@@ -26,12 +35,8 @@ export function computeFreshScores(
     const predictionByUserMatch = new Map<string, any>()
     for (const p of predictions) predictionByUserMatch.set(`${p.user_id}:${p.match_id}`, p)
     for (const bp of bracketPicks) {
-        const matchId = matchIdForPick(bp)
-        predictionByUserMatch.set(`${bp.user_id}:${matchId}`, {
-            ...bp,
-            match_id: matchId,
-            qualifier_pick: bp.team_code,
-        })
+        const normalizedPick = normalizeBracketPickForScoring(bp)
+        predictionByUserMatch.set(`${normalizedPick.user_id}:${normalizedPick.match_id}`, normalizedPick)
     }
 
     const totals = new Map<string, FreshScoreTotals>()

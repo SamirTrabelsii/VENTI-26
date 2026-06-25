@@ -27,11 +27,18 @@ export interface LeaderboardUser {
 interface LeaderboardClientProps {
     initialLeaderboard: LeaderboardUser[]
     initialLiveMatches?: any[]
+    initialScoredMatchIds?: string[]
     livePredictions?: any[]
     currentUserId?: string
 }
 
-export default function LeaderboardClient({ initialLeaderboard, initialLiveMatches = [], livePredictions = [], currentUserId }: LeaderboardClientProps) {
+export default function LeaderboardClient({
+    initialLeaderboard,
+    initialLiveMatches = [],
+    initialScoredMatchIds = [],
+    livePredictions = [],
+    currentUserId,
+}: LeaderboardClientProps) {
     const router = useRouter()
     const [currentLeaderboard, setCurrentLeaderboard] = useState<LeaderboardUser[]>(initialLeaderboard)
     const [liveMatches, setLiveMatches] = useState<any[]>(initialLiveMatches)
@@ -69,7 +76,7 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
                 scheduleRefresh()
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
-                if (payload.new.status === 'finished') scheduleRefresh()
+                if (payload.new.status === 'live' || payload.new.status === 'finished') scheduleRefresh()
                 setLiveMatches(prev => {
                     const matchIdx = prev.findIndex(m => m.id === payload.new.id)
                     if (payload.new.status === 'live') {
@@ -95,13 +102,16 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
     }, [router])
 
     const dynamicLeaderboard = useMemo(() => {
+        const scoredMatchIds = new Set(initialScoredMatchIds)
         const mapped = currentLeaderboard.map(user => {
             let liveBonus = 0
-            let uncommittedBonus = 0
+            let pendingFinishedBonus = 0
             let exactBonus = 0
             let correctBonus = 0
 
-            // Add points for any currently live matches
+            // Add temporary points from the external API. In-play points get a
+            // live label; full-time points waiting for the DB sync only affect
+            // the displayed total so the leaderboard matches profile totals.
             for (const match of liveMatches) {
                 const staticMatch = ALL_MATCHES.find(m => m.id === match.id)
                 if (!staticMatch) continue
@@ -110,27 +120,15 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
                 const effAway = match.away_team ?? staticMatch.away_team;
                 const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === effHome && l.awayTeam.tla === effAway)
 
-                let hScore = match.home_score
-                let aScore = match.away_score
-                let isLiveOrFinished = match.status === 'live'
-                let isApiFinished = false
+                const isInPlay = apiMatch?.status === 'IN_PLAY' || apiMatch?.status === 'PAUSED'
+                const isPendingFinished = apiMatch?.status === 'FINISHED'
+                if (!isInPlay && !isPendingFinished) continue
+                if (isPendingFinished && scoredMatchIds.has(match.id)) continue
 
-                if (apiMatch) {
-                    if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED' || apiMatch.status === 'FINISHED') {
-                        isLiveOrFinished = true
-                    }
-                    if (apiMatch.status === 'FINISHED') {
-                        isApiFinished = true
-                    }
-                    if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
-                        hScore = apiMatch.score.fullTime.home
-                    }
-                    if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
-                        aScore = apiMatch.score.fullTime.away
-                    }
-                }
+                const hScore = apiMatch.score?.fullTime?.home
+                const aScore = apiMatch.score?.fullTime?.away
 
-                if (!isLiveOrFinished || hScore === null || aScore === null) continue
+                if (typeof hScore !== 'number' || typeof aScore !== 'number') continue
                 
                 const pred = livePredictions.find(p => p.user_id === user.id && p.match_id === match.id)
                 if (pred) {
@@ -157,11 +155,8 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
                         }
                     )
                     
-                    if (isApiFinished) {
-                        uncommittedBonus += result.total
-                    } else {
-                        liveBonus += result.total
-                    }
+                    if (isInPlay) liveBonus += result.total
+                    else pendingFinishedBonus += result.total
                     
                     if (result.type === 'exact') exactBonus += 1
                     if (['exact', 'correct', 'goal_diff'].includes(result.type)) correctBonus += 1
@@ -170,16 +165,21 @@ export default function LeaderboardClient({ initialLeaderboard, initialLiveMatch
 
             return {
                 ...user,
-                display_points: user.total_points + liveBonus + uncommittedBonus,
+                display_points: user.total_points + liveBonus + pendingFinishedBonus,
                 live_bonus: liveBonus,
                 dynamic_streak: user.streak,
                 dynamic_exact: user.exact_scores + exactBonus,
                 dynamic_correct: user.correct_results + correctBonus
             }
         })
-        mapped.sort((a, b) => b.display_points - a.display_points)
+        mapped.sort((a, b) =>
+            b.display_points - a.display_points ||
+            b.dynamic_exact - a.dynamic_exact ||
+            b.dynamic_correct - a.dynamic_correct ||
+            a.display_name.localeCompare(b.display_name)
+        )
         return mapped
-    }, [currentLeaderboard, liveMatches, livePredictions, liveApiMatches])
+    }, [currentLeaderboard, liveMatches, initialScoredMatchIds, livePredictions, liveApiMatches])
 
     const top3 = dynamicLeaderboard.slice(0, 3)
     const rest = dynamicLeaderboard.slice(3)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/pagination'
-import { computeFreshScores } from '@/lib/fresh-scores'
+import { computeFreshScores, normalizeBracketPickForScoring } from '@/lib/fresh-scores'
 import { scoreMatch } from '@/lib/scoring'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 
@@ -44,7 +44,6 @@ export async function GET(
         return NextResponse.json({ scores: [], member_count: 0, members_preview: [] })
     }
 
-    const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     const [predictions, bracketPicks, scoreRows, finishedMatchesData, liveMatchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*').in('user_id', memberIds)),
         fetchAllRows(supabase.from('bracket_picks').select('*').in('user_id', memberIds)),
@@ -54,8 +53,7 @@ export async function GET(
             supabase
                 .from('matches')
                 .select('*')
-                .neq('status', 'finished')
-                .lte('kickoff', twoHoursFromNow)
+                .eq('status', 'live')
         ),
     ])
 
@@ -91,8 +89,14 @@ export async function GET(
         liveApiMatches = []
     }
 
+    const liveMatchIds = new Set(liveMatchesData.map((m: any) => m.id))
     const livePredictions = liveMatchesData.length > 0
-        ? predictions.filter((p: any) => liveMatchesData.some((m: any) => m.id === p.match_id))
+        ? [
+            ...predictions.filter((p: any) => liveMatchIds.has(p.match_id)),
+            ...bracketPicks
+                .map(normalizeBracketPickForScoring)
+                .filter((p: any) => liveMatchIds.has(p.match_id)),
+        ]
         : []
 
     const liveTotalsByUser = new Map<string, { points: number; exact: number; correct: number }>()
@@ -104,23 +108,12 @@ export async function GET(
         const effAway = match.away_team ?? staticMatch.away_team
         const apiMatch = liveApiMatches.find(l => l.homeTeam?.tla === effHome && l.awayTeam?.tla === effAway)
 
-        let hScore = match.home_score
-        let aScore = match.away_score
-        let isLiveOrFinished = match.status === 'live'
+        if (apiMatch?.status !== 'IN_PLAY' && apiMatch?.status !== 'PAUSED') continue
 
-        if (apiMatch) {
-            if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED' || apiMatch.status === 'FINISHED') {
-                isLiveOrFinished = true
-            }
-            if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
-                hScore = apiMatch.score.fullTime.home
-            }
-            if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
-                aScore = apiMatch.score.fullTime.away
-            }
-        }
+        const hScore = apiMatch.score?.fullTime?.home
+        const aScore = apiMatch.score?.fullTime?.away
 
-        if (!isLiveOrFinished || hScore === null || aScore === null) continue
+        if (typeof hScore !== 'number' || typeof aScore !== 'number') continue
 
         for (const pred of livePredictions.filter((p: any) => p.match_id === match.id)) {
             const ko = isKnockout(staticMatch.group_label)
