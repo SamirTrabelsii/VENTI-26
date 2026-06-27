@@ -6,7 +6,6 @@ import ThirdPlaceTable from '@/components/ThirdPlaceTable'
 import LockBanner from '@/components/LockBanner'
 import HowToPlay from '@/components/HowToPlay'
 import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
-import BracketSection from '@/components/BracketSection'
 import { PredictionProvider } from '@/components/PredictionContext'
 import { GROUPS, GROUP_MATCHES, getGroupMatches, getFlagUrl } from '@/lib/wc2026-data'
 import TeamFlag from '@/components/TeamFlag'
@@ -88,9 +87,6 @@ export default async function PredictPage() {
                     <a href="#third-place" style={{ display: 'block', padding: '10px 18px', fontSize: 13, fontWeight: 500, color: 'var(--cream)', textDecoration: 'none' }}>
                         🏅 3rd Place Ranking
                     </a>
-                    <a href="#knockout" style={{ display: 'block', padding: '10px 18px', fontSize: 13, fontWeight: 500, color: 'var(--cream)', textDecoration: 'none' }}>
-                        🏟️ Knockout Bracket
-                    </a>
                     
                     <div style={{ height: 1, background: 'var(--border)', margin: '14px 18px' }} />
                     
@@ -118,9 +114,6 @@ export default async function PredictPage() {
                         ))}
                         <a href="#third-place" className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
                             3rd Place
-                        </a>
-                        <a href="#knockout" className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
-                            Bracket
                         </a>
                     </div>
 
@@ -183,11 +176,6 @@ export default async function PredictPage() {
                             />
                         </div>
 
-                        {/* 3. Knockout Bracket */}
-                        <div id="knockout" style={{ marginBottom: 80 }}>
-                            <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 44, color: 'var(--gold)', marginBottom: 20 }}>Knockout Bracket</h1>
-                            <BracketSection />
-                        </div>
                         </div>
                     </PredictionProvider>
                 </main>

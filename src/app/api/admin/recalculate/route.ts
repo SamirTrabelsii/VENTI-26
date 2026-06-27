@@ -44,10 +44,10 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
 }> {
     const db = createAdminClient()
 
-    const [matches, predictions, bracketPicks, memberships, existingScores] = await Promise.all([
+    const [matches, predictions, liveKoPicks, memberships, existingScores] = await Promise.all([
         fetchAllRows(db.from('matches').select('*').eq('status', 'finished')),
         fetchAllRows(db.from('predictions').select('*')),
-        fetchAllRows(db.from('bracket_picks').select('*')),
+        fetchAllRows(db.from('live_ko_picks').select('*')),
         fetchAllRows(db.from('group_members').select('user_id, group_id')),
         fetchAllRows(db.from('scores').select('user_id, group_id, bracket_bonus_points')),
     ])
@@ -59,12 +59,14 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
     // Build prediction lookup: user_id:match_id -> prediction
     const predictionByUserMatch = new Map<string, any>()
     for (const p of predictions) predictionByUserMatch.set(`${p.user_id}:${p.match_id}`, p)
-    for (const bp of bracketPicks) {
+    const liveKoByUserMatch = new Map<string, any>()
+    for (const bp of liveKoPicks) {
         const mId = matchIdForPick(bp)
-        predictionByUserMatch.set(`${bp.user_id}:${mId}`, {
+        liveKoByUserMatch.set(`${bp.user_id}:${mId}`, {
             ...bp,
             match_id: mId,
             qualifier_pick: bp.team_code,
+            is_live_ko_pick: true,
         })
     }
 
@@ -108,7 +110,9 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
 
         for (const match of finishedMatches) {
             const isKnockout = isKnockoutMatch(match)
-            const prediction = predictionByUserMatch.get(`${userId}:${match.id}`)
+            const prediction = isKnockout
+                ? liveKoByUserMatch.get(`${userId}:${match.id}`)
+                : predictionByUserMatch.get(`${userId}:${match.id}`)
 
             if (!prediction) {
                 // Missed prediction — break streak
@@ -130,10 +134,11 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
             }
 
             // Check fixture correctness for knockout matches
-            const isFixtureCorrect = !isKnockout ||
-                !prediction.predicted_home_team ||
-                !prediction.predicted_away_team ||
-                (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
+            const isFixtureCorrect = isKnockout
+                ? true
+                : !prediction.predicted_home_team ||
+                    !prediction.predicted_away_team ||
+                    (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
 
             const options = {
                 predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
@@ -167,7 +172,7 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
 
     for (const userId of targetUserIds) {
         const userPreds = predictions.filter((p: any) => p.user_id === userId)
-        const userBracket = bracketPicks.filter((bp: any) => bp.user_id === userId)
+        const userBracket = liveKoPicks.filter((bp: any) => bp.user_id === userId)
 
         try {
             const earned = evaluateBadges({

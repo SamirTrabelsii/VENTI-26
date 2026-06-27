@@ -1,17 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-    Activity,
-    Award,
-    BarChart3,
+    AlertTriangle,
     ChevronLeft,
     ChevronRight,
+    Gift,
     Medal,
     Sparkles,
+    Swords,
     Target,
-    UserRound,
     X,
     type LucideIcon
 } from 'lucide-react'
@@ -24,14 +24,15 @@ type Slide = {
     note: string
     Icon: LucideIcon
     accent: string
-    variant?: 'scoring'
+    variant?: 'scoring' | 'bonus'
 }
 
 const STORAGE_PREFIX = 'venti26:whats-new'
 const SCORING_HIGHLIGHTS = [
     { points: '+25', title: 'Exact score', detail: 'Hard cap' },
     { points: '+10', title: 'Correct result', detail: 'Win/draw/loss' },
-    { points: '+3', title: 'Goal-Goal/No Goal', detail: 'Both teams scores/Clean-Sheet' },
+    { points: '+10', title: 'Correct qualifier', detail: 'Right team advances' },
+    { points: '+3', title: 'GG / No Goal', detail: 'BTTS or clean sheet' },
 ]
 const SCORING_LADDER = [
     { error: '1', points: '+5' },
@@ -42,7 +43,16 @@ const SCORING_LADDER = [
     { error: '6+', points: '+0' }
 ]
 
+const FIRST_R32_KICKOFF = '2026-06-28T18:00:00.000Z'
+
+function formatKickoffLocal(utc: string) {
+    const d = new Date(utc)
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
+        ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
+    const router = useRouter()
     const [supabase] = useState(() => createClient())
     const [visible, setVisible] = useState(false)
     const [storageKey, setStorageKey] = useState<string | null>(null)
@@ -51,41 +61,35 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
 
     const slides = useMemo<Slide[]>(() => [
         {
-            title: 'New Scoring System',
-            body: 'A precise scoring model with exact scores, match result points, goal accuracy, and clean-sheet bonuses.',
+            title: 'Knockout Bracket Reset',
+            body: 'The original knockout bracket was set up incorrectly. Your old picks won\'t count — but now you can re-predict with real knowledge from the group stage.',
+            note: 'تم إعادة تعيين توقعات مرحلة خروج المغلوب بسبب خطأ في الشجرة الأصلية. توقعاتكم السابقة لن تُحتسب — لكن يمكنكم الآن إعادة التوقع بناءً على ما شاهدتموه في دور المجموعات.',
+            Icon: AlertTriangle,
+            accent: '#F59E0B',
+        },
+        {
+            title: 'Live KO — Your New Arena',
+            body: 'Head to the Live KO page to predict every knockout match from R32 to the Final. Predictions open when teams are confirmed, lock at kickoff.',
+            note: `⚡ First R32 match: ${formatKickoffLocal(FIRST_R32_KICKOFF)} — don't miss it!`,
+            Icon: Swords,
+            accent: '#22C55E',
+        },
+        {
+            title: 'KO Scoring',
+            body: '',
             note: '',
             Icon: Target,
             accent: '#D4A843',
             variant: 'scoring'
         },
         {
-            title: 'Pulse page',
-            body: 'A new place to follow tournament KPIs and competition signals.',
-            note: 'Quick view of momentum, live context, and key numbers.',
-            Icon: Activity,
-            accent: '#2DD4BF'
+            title: 'Qualification Bonus',
+            body: '+1 point for every team you predicted to qualify that actually made it through.',
+            note: '',
+            Icon: Gift,
+            accent: '#A78BFA',
+            variant: 'bonus'
         },
-        {
-            title: 'Leaderboard improved',
-            body: 'Rankings now reflect the new points model more clearly.',
-            note: 'Totals are recalculated with the updated formula.',
-            Icon: BarChart3,
-            accent: '#60A5FA'
-        },
-        {
-            title: 'Profile Page',
-            body: 'Your player profile now has a clearer place in the platform.',
-            note: 'Follow identity, stats, and your tournament story from one page.',
-            Icon: UserRound,
-            accent: '#F472B6'
-        },
-        {
-            title: 'Badges & Awards',
-            body: 'A new success system is coming to celebrate strong predictions and big moments.',
-            note: 'Upcoming awards will highlight exact scores, streaks, leaderboard climbs, and tournament achievements.',
-            Icon: Award,
-            accent: '#A3E635'
-        }
     ], [])
 
     useEffect(() => {
@@ -167,6 +171,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const goNext = () => {
         if (active === slides.length - 1) {
             markSeen()
+            router.push('/live-bracket')
             return
         }
 
@@ -207,7 +212,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                         <Sparkles size={18} className="text-[#D4A843]" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D4A843]">Season update</p>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D4A843]">Important update</p>
                                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">{active + 1} of {slides.length}</p>
                                     </div>
                                 </div>
@@ -260,20 +265,13 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                         </h2>
                                     </div>
 
-
-                                    {slide.variant !== 'scoring' && (
-                                        <p className="mt-4 text-base leading-7 text-zinc-300">
-                                            {slide.body}
-                                        </p>
-                                    )}
-
                                     {slide.variant === 'scoring' ? (
                                         <div className="mt-3 space-y-2">
                                             <p className="text-[13px] leading-snug text-zinc-300">
-                                                Exact score is king. Otherwise, score the result, then add tight accuracy and bonus calls.
+                                                Knockout scoring — up to <span className="font-bold text-[#D4A843]">35 pts</span> per match. Exact score is king.
                                             </p>
 
-                                            <div className="grid grid-cols-3 gap-1.5">
+                                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                                                 {SCORING_HIGHLIGHTS.map(rule => (
                                                     <div key={rule.title} className="border border-white/10 bg-white/[0.04] p-2">
                                                         <p className="font-display text-2xl leading-none text-[#D4A843]">{rule.points}</p>
@@ -300,41 +298,52 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-2 gap-2">
                                                 <div className="border border-white/10 bg-black/35 p-2">
                                                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Wrong winner</p>
                                                     <p className="font-display text-xl text-white">0 base</p>
                                                 </div>
                                                 <div className="border border-white/10 bg-black/35 p-2">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Knockout advance</p>
-                                                    <p className="font-display text-xl text-white">+5</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Max per KO match</p>
+                                                    <p className="font-display text-xl text-[#D4A843]">35</p>
                                                 </div>
-                                                <div className="border border-white/10 bg-black/35 p-2">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Supplements</p>
-                                                    <p className="font-display text-xl text-white">x / bonus</p>
+                                            </div>
+                                        </div>
+                                    ) : slide.variant === 'bonus' ? (
+                                        <div className="mt-3 space-y-3">
+                                            <p className="text-base leading-7 text-zinc-300">
+                                                {slide.body}
+                                            </p>
+
+                                            <div className="border border-[#A78BFA]/30 bg-[#A78BFA]/[0.06] p-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="grid h-14 w-14 flex-shrink-0 place-items-center border border-[#A78BFA]/40 bg-black/40">
+                                                        <p className="font-display text-3xl text-[#A78BFA]">+1</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#A78BFA]">Per correct qualification</p>
+                                                        <p className="mt-1 text-sm leading-snug text-zinc-300">Predicted they qualify → they did → you score.</p>
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between border border-white/5 bg-white/[0.02] p-2 mt-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#D4A843]">e.g.</span>
-                                                    <span className="text-[10px] text-zinc-300">Predict <b>3-1</b>, Actual <b>2-1</b></span>
-                                                </div>
-                                                <div className="flex items-center gap-1 text-[8px] font-bold text-zinc-500 uppercase">
-                                                    <span>Result (+10)</span>
-                                                    <span>+</span>
-                                                    <span>Off by 1 (+5)</span>
-                                                    <span>+</span>
-                                                    <span>GG (+3)</span>
-                                                    <span className="text-[#D4A843] ml-1 text-[11px]">= 18</span>
-                                                </div>
+                                            <div className="flex items-start gap-3 border border-white/10 bg-white/[0.04] p-3">
+                                                <Medal size={18} className="mt-0.5 shrink-0 text-[#D4A843]" />
+                                                <p className="text-sm leading-6 text-zinc-400">Calculated automatically after groups conclude.</p>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="mt-5 flex items-start gap-3 border border-white/10 bg-white/[0.04] p-4">
-                                            <Medal size={18} className="mt-0.5 shrink-0 text-[#D4A843]" />
-                                            <p className="text-sm leading-6 text-zinc-300">{slide.note}</p>
-                                        </div>
+                                        <>
+                                            <p className="mt-4 text-base leading-7 text-zinc-300">
+                                                {slide.body}
+                                            </p>
+
+                                            {slide.note && (
+                                                <div className="mt-5 border border-white/10 bg-white/[0.04] p-4" style={{ direction: 'rtl', textAlign: 'right' }}>
+                                                    <p className="text-sm leading-7 text-zinc-300">{slide.note}</p>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </motion.div>
                             </AnimatePresence>
@@ -355,7 +364,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     onClick={goNext}
                                     className="flex h-11 items-center gap-3 bg-[#D4A843] px-5 text-xs font-black uppercase tracking-[0.18em] text-black transition-transform hover:translate-x-0.5"
                                 >
-                                    {active === slides.length - 1 ? 'Done' : 'Next'}
+                                    {active === slides.length - 1 ? 'Let\'s Go' : 'Next'}
                                     <ChevronRight size={17} />
                                 </button>
                             </div>
@@ -366,3 +375,4 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
         </AnimatePresence>
     )
 }
+

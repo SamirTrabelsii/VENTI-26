@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-import { BRACKET_ROUNDS } from '@/lib/wc2026-data'
 
 export async function POST(request: Request) {
     // Auth guard (check for admin or scoring secret)
@@ -58,13 +57,13 @@ export async function POST(request: Request) {
             }
         }
 
-        // 2. Fetch all bracket picks
+        // 2. Fetch all live knockout picks
         const { data: bracketPicks, error: bpErr } = await supabase
-            .from('bracket_picks')
+            .from('live_ko_picks')
             .select('user_id, round, team_code')
 
         if (bpErr || !bracketPicks) {
-            throw new Error('Failed to fetch bracket picks')
+            throw new Error('Failed to fetch live knockout picks')
         }
 
         // 3. Calculate bracket bonus points per user

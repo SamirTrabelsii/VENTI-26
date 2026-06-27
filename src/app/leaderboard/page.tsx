@@ -91,7 +91,7 @@ export default async function LeaderboardPage() {
     // 2. Fetch raw prediction data and recompute totals instead of trusting cached scores.
     const [groupPredData, bracketPredData, scoresData, matchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*')),
-        fetchAllRows(supabase.from('bracket_picks').select('*')),
+        fetchAllRows(supabase.from('live_ko_picks').select('*')),
         fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points')),
         fetchAllRows(supabase.from('matches').select('*')),
     ])

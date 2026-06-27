@@ -67,10 +67,11 @@ export function computeFreshScores(
             }
 
             const isKnockout = isKnockoutMatch(match)
-            const isFixtureCorrect = !isKnockout ||
-                !prediction.predicted_home_team ||
-                !prediction.predicted_away_team ||
-                (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
+            const isFixtureCorrect = isKnockout
+                ? true
+                : !prediction.predicted_home_team ||
+                    !prediction.predicted_away_team ||
+                    (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
 
             const result = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, {
                 predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,

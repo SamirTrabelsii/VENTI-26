@@ -34,12 +34,21 @@ function formatPlaceholder(code: string): string {
     return code
 }
 
-interface FixturesClientProps {
-    predictions: Array<{ match_id: string; home_score: number; away_score: number }>
-    dbMatches: Array<{ id: string; status: string; home_score: number | null; away_score: number | null; kickoff?: string }>
+function getKnockoutPickSlot(matchId: string): { round: string; slotIndex: number } | null {
+    if (matchId === 'final') return { round: 'final', slotIndex: 0 }
+    if (matchId === 'third_place') return { round: 'third_place', slotIndex: 0 }
+    const match = matchId.match(/^([a-z0-9]+)_(\d+)$/)
+    if (!match) return null
+    return { round: match[1], slotIndex: Number(match[2]) - 1 }
 }
 
-export default function FixturesClient({ predictions, dbMatches }: FixturesClientProps) {
+interface FixturesClientProps {
+    predictions: Array<any>
+    dbMatches: Array<any>
+    liveKoPicks?: Array<any>
+}
+
+export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [] }: FixturesClientProps) {
     const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
     const [filter, setFilter] = useState<'all' | 'group' | 'knockout'>('all')
     const [currentDbMatches, setCurrentDbMatches] = useState(dbMatches)
@@ -104,6 +113,8 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                 home_team: dbMatch?.home_team ?? m.home_team,
                 away_team: dbMatch?.away_team ?? m.away_team,
                 kickoff: dbMatch?.kickoff ?? m.kickoff,
+                qualifier: dbMatch?.qualifier ?? m.qualifier,
+                stage: dbMatch?.stage ?? m.stage,
                 dbStatus: status,
                 actualHomeScore: hScore,
                 actualAwayScore: aScore,
@@ -214,7 +225,16 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
         const ko = m.isKnockoutMatch
         const roundLabel = ROUND_LABELS[m.group_label]
 
-        const prediction = predictions.find(p => p.match_id === m.id)
+        let prediction = predictions.find(p => p.match_id === m.id)
+        if (ko) {
+            const slot = getKnockoutPickSlot(m.id)
+            if (slot) {
+                const koPick = liveKoPicks.find(p => p.round === slot.round && p.slot_index === slot.slotIndex)
+                if (koPick) {
+                    prediction = koPick
+                }
+            }
+        }
         let provisionalPoints: number | null = null
         if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
             const effPredHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number' ? prediction.original_home_score : prediction.home_score;
@@ -474,7 +494,18 @@ export default function FixturesClient({ predictions, dbMatches }: FixturesClien
                 <MatchModal
                     match={selectedModalMatch}
                     localMatchId={selectedModalMatch.id.toString()}
-                    prediction={predictions.find(p => p.match_id === selectedModalMatch.id) ?? null}
+                    prediction={
+                        (() => {
+                            const ko = selectedModalMatch.stage === 'KNOCKOUT'
+                            if (ko) {
+                                const slot = getKnockoutPickSlot(selectedModalMatch.id.toString())
+                                if (slot) {
+                                    return liveKoPicks.find(p => p.round === slot.round && p.slot_index === slot.slotIndex) ?? null
+                                }
+                            }
+                            return predictions.find(p => p.match_id === selectedModalMatch.id) ?? null
+                        })()
+                    }
                     onClose={() => setSelectedMatchId(null)}
                 />
             )}

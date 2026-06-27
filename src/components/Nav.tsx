@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef, useEffect } from 'react'
 import { getRobohashUrl } from '@/lib/wc2026-data'
-import { Home, CalendarDays, Edit3, Users, Trophy, Globe, LogOut, User } from 'lucide-react'
+import { Home, CalendarDays, Edit3, Users, Trophy, Globe, LogOut, User, GitBranch } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import WhatsNewCarousel from '@/components/WhatsNewCarousel'
 
@@ -12,6 +12,7 @@ const TABS = [
     { href: '/home', label: 'Home', icon: Home },
     { href: '/fixtures', label: 'Fixtures', icon: CalendarDays },
     { href: '/predict', label: 'Predict', icon: Edit3 },
+    { href: '/live-bracket', label: 'Live KO', icon: GitBranch },
     { href: '/groups', label: 'Groups', icon: Users },
     { href: '/leaderboard', label: 'Rankings', icon: Trophy },
     { href: '/pulse', label: 'Pulse', icon: Globe }

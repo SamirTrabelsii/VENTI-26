@@ -10,6 +10,11 @@ import { motion } from 'framer-motion'
 
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
+function matchIdForLiveKoPick(pick: any) {
+    if (pick.round === 'final' || pick.round === 'third_place') return pick.round
+    return `${pick.round}_${pick.slot_index + 1}`
+}
+
 import { BADGE_DEFINITIONS, getBadgeProgress } from '@/lib/badges'
 
 type Tier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'crown' | 'lightning'
@@ -40,6 +45,7 @@ function ProfileContent() {
     const [profile, setProfile] = useState<any>(null)
     const [predCount, setPredCount] = useState(0)
     const [totalPoints, setTotalPoints] = useState(0)
+    const [qualifiersBonus, setQualifiersBonus] = useState(0)
     const [exactCount, setExactCount] = useState(0)
     const [currentStreak, setCurrentStreak] = useState(0)
     const [bestStreak, setBestStreak] = useState(0)
@@ -74,26 +80,28 @@ function ProfileContent() {
             // Fetch User Predictions
             const { data: predictions } = await supabase.from('predictions').select('*').eq('user_id', targetUserId)
             
-            // Fetch Bracket Picks
-            const { data: bracketPicks } = await supabase.from('bracket_picks').select('*').eq('user_id', targetUserId)
+            // Fetch live knockout picks
+            const { data: liveKoPicks } = await supabase.from('live_ko_picks').select('*').eq('user_id', targetUserId)
             
             // Fetch Bracket Bonus Points
             const { data: scoreRow } = await supabase.from('scores').select('bracket_bonus_points').eq('user_id', targetUserId).limit(1).single()
             const bracketBonus = scoreRow?.bracket_bonus_points || 0
+            setQualifiersBonus(bracketBonus)
 
             
             const groupPreds = predictions?.length ?? 0
-            const bracketPreds = bracketPicks?.length ?? 0
+            const bracketPreds = liveKoPicks?.length ?? 0
             setPredCount(groupPreds + bracketPreds)
 
-            // Normalize bracket picks to look like standard predictions
-            const normalizedBracketPicks = (bracketPicks || []).map(bp => ({
+            // Normalize live knockout picks to look like standard predictions
+            const normalizedLiveKoPicks = (liveKoPicks || []).map(bp => ({
                 ...bp,
-                match_id: `${bp.round}_${bp.slot_index + 1}`,
-                is_repredicted: false // Or fetch actual repredictions if they exist
+                match_id: matchIdForLiveKoPick(bp),
+                qualifier_pick: bp.team_code,
+                is_repredicted: false
             }))
 
-            const allPredictions = [...(predictions || []), ...normalizedBracketPicks]
+            const allPredictions = [...(predictions || []), ...normalizedLiveKoPicks]
 
             // Fetch earned badges from DB
             const { data: dbBadges } = await supabase.from('user_badges').select('badge_id').eq('user_id', targetUserId)
@@ -132,13 +140,14 @@ function ProfileContent() {
                             const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
                             const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
                             
-                            const isFixtureCorrect = !isKnockout ||
-                                !pred.predicted_home_team ||
-                                !pred.predicted_away_team ||
-                                (pred.predicted_home_team === lm.homeTeam.tla && pred.predicted_away_team === lm.awayTeam.tla);
+                            const isFixtureCorrect = isKnockout
+                                ? true
+                                : !pred.predicted_home_team ||
+                                    !pred.predicted_away_team ||
+                                    (pred.predicted_home_team === lm.homeTeam.tla && pred.predicted_away_team === lm.awayTeam.tla);
 
                             const res = scoreMatch(effPredHome, effPredAway, lm.score.fullTime.home, lm.score.fullTime.away, isKnockout, {
-                                predQualifier: pred.qualifier,
+                                predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
                                 isRepredicted: pred.is_repredicted,
                                 isFixtureCorrect,
                                 multiplier: 1 // Live matches via API don't have DB multipliers easily accessible here unless fetched
@@ -181,13 +190,14 @@ function ProfileContent() {
                                 const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
                                 const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
                                 
-                                const isFixtureCorrect = !isKnockout ||
-                                    !pred.predicted_home_team ||
-                                    !pred.predicted_away_team ||
-                                    (pred.predicted_home_team === dbm.home_team && pred.predicted_away_team === dbm.away_team);
+                                const isFixtureCorrect = isKnockout
+                                    ? true
+                                    : !pred.predicted_home_team ||
+                                        !pred.predicted_away_team ||
+                                        (pred.predicted_home_team === dbm.home_team && pred.predicted_away_team === dbm.away_team);
 
                                 const res = scoreMatch(effPredHome, effPredAway, dbm.home_score, dbm.away_score, isKnockout, {
-                                    predQualifier: pred.qualifier,
+                                    predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
                                     realQualifier: dbm.qualifier,
                                     isRepredicted: !!pred.is_repredicted,
                                     multiplier: dbm.multiplier ?? 1,
@@ -260,7 +270,7 @@ function ProfileContent() {
             const progress = getBadgeProgress({
                 userId: targetUserId,
                 predictions: allPredictions,
-                bracketPicks: bracketPicks || [],
+                bracketPicks: liveKoPicks || [],
                 finishedMatches: hist,
                 allFinishedMatches: hist,
             }, new Set((dbBadges || []).map(b => b.badge_id)))
@@ -355,6 +365,7 @@ function ProfileContent() {
                         {[
                             { icon: '🎯', label: 'Exact Scores', value: exactCount, accent: '#e05c4a' },
                             { icon: '📊', label: 'Result Accuracy', value: `${resultAccuracy}%`, accent: '#5b9fff' },
+                            { icon: '🎁', label: 'Correct Qualifiers', value: `${qualifiersBonus} (+${qualifiersBonus} pts)`, accent: '#a855f7' },
                             { icon: '🔥', label: 'Current Streak', value: currentStreak > 0 ? `${currentStreak}` : '—', accent: '#22c55e' },
                             { icon: '🏆', label: 'Best Streak', value: bestStreak, accent: 'var(--gold)' },
                             { icon: '⚽', label: 'Total Predictions', value: `${predCount} / 104`, accent: 'var(--gold)' },

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { scoreMatch } from '@/lib/scoring'
 import { fetchAllRows } from '@/lib/supabase/pagination'
+import { roundSlotFromFixtureId } from '@/lib/live-bracket'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/scoring
@@ -68,10 +69,10 @@ export async function POST(request: Request) {
     )
 
     // ── 2b. Load bracket picks for this match if it's a knockout ──────────────
-    let bracketPicks: any[] = []
+    let liveKoPicks: any[] = []
     let multiplier = 1
-    if (isKnockout && match.id.includes('_')) {
-        const [round, numStr] = match.id.split('_')
+    if (isKnockout) {
+        const { round, slotIndex } = roundSlotFromFixtureId(match.id)
 
         // Determine multiplier
         if (round === 'r32') multiplier = 1.5
@@ -82,29 +83,32 @@ export async function POST(request: Request) {
 
         const bp = await fetchAllRows(
             supabase
-                .from('bracket_picks')
+                .from('live_ko_picks')
                 .select('user_id, slot_index, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
                 .eq('round', round)
+                .eq('slot_index', slotIndex)
         )
 
-        bracketPicks = bp || []
+        liveKoPicks = bp || []
     }
 
-    // Collect all users who have either a prediction or a bracket pick
+    // Collect all users who have a scorable prediction source.
     const allUserIds = new Set<string>()
-    predictions?.forEach(p => allUserIds.add(p.user_id))
-    bracketPicks?.forEach(bp => allUserIds.add(bp.user_id))
+    if (isKnockout) {
+        liveKoPicks?.forEach(bp => allUserIds.add(bp.user_id))
+    } else {
+        predictions?.forEach(p => allUserIds.add(p.user_id))
+    }
 
-    if (allUserIds.size === 0) {
+    if (allUserIds.size === 0 && !isKnockout) {
         return NextResponse.json({ message: 'No predictions for this match', processed: 0 })
     }
 
-    const [roundStr, numStr] = match.id.split('_')
-    const slot_index = parseInt(numStr) - 1
+    const slot_index = isKnockout ? roundSlotFromFixtureId(match.id).slotIndex : -1
 
     // ── 3. Score every prediction (for the response breakdown) ────────────────
     const results = Array.from(allUserIds).map(userId => {
-        const p = predictions?.find(x => x.user_id === userId)
+        const p = isKnockout ? null : predictions?.find(x => x.user_id === userId)
 
         let predHome = p?.home_score
         let predAway = p?.away_score
@@ -112,26 +116,13 @@ export async function POST(request: Request) {
         let isRepredicted = p?.is_repredicted ?? false
         let isFixtureCorrect = true
 
-        // If knockout match, derive original prediction from bracket_picks if they didn't repredict
         if (isKnockout) {
-            const matchPick = bracketPicks.find(bp => bp.user_id === userId && bp.slot_index === slot_index)
-
-            if (!isRepredicted) {
-                if (matchPick && typeof matchPick.home_score === 'number' && typeof matchPick.away_score === 'number') {
-                    predHome = matchPick.home_score
-                    predAway = matchPick.away_score
-                }
-            }
-
-            if (matchPick && matchPick.predicted_home_team && matchPick.predicted_away_team) {
-                const userPickedHome = matchPick.predicted_home_team
-                const userPickedAway = matchPick.predicted_away_team
-                if (userPickedHome !== match.home_team || userPickedAway !== match.away_team) {
-                    isFixtureCorrect = false
-                }
-            } else {
-                isFixtureCorrect = false
-            }
+            const matchPick = liveKoPicks.find(bp => bp.user_id === userId && bp.slot_index === slot_index)
+            predHome = matchPick?.home_score
+            predAway = matchPick?.away_score
+            predQualifier = matchPick?.team_code ?? null
+            isRepredicted = false
+            isFixtureCorrect = true
         } else {
             // Group match
             if (!isRepredicted && typeof p?.original_home_score === 'number' && typeof p?.original_away_score === 'number') {
@@ -175,7 +166,7 @@ export async function POST(request: Request) {
     // all users who had a prediction on this match. This guarantees every
     // (user, group) row has the exact same correct total.
     const { recalculateAllUsers } = await import('@/app/api/admin/recalculate/route')
-    const recalcResult = await recalculateAllUsers(userIds)
+    const recalcResult = await recalculateAllUsers(isKnockout ? undefined : userIds)
 
     // ── 6. Return summary ─────────────────────────────────────────────────────
     return NextResponse.json({

@@ -110,8 +110,8 @@ export async function GET(
 
         const bracketPicks = await fetchAllRows(
             supabase
-                .from('bracket_picks')
-                .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, is_repredicted, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
+                .from('live_ko_picks')
+                .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
                 .eq('round', slot.round)
                 .eq('slot_index', slot.slotIndex)
                 .not('home_score', 'is', null)
@@ -120,9 +120,7 @@ export async function GET(
 
         const leaderboard = (bracketPicks ?? []).map(p => {
             const profile = Array.isArray(p.profile) ? p.profile[0] : p.profile
-            const isFixtureCorrect = !hasScore || !p.predicted_home_team || !p.predicted_away_team
-                ? true
-                : p.predicted_home_team === dbMatch?.home_team && p.predicted_away_team === dbMatch?.away_team
+            const isFixtureCorrect = true
             const scoreResult = hasScore
                 ? scoreMatch(
                     p.home_score,
@@ -133,7 +131,7 @@ export async function GET(
                     {
                         predQualifier: p.team_code,
                         realQualifier: dbMatch?.qualifier ?? null,
-                        isRepredicted: p.is_repredicted ?? false,
+                        isRepredicted: false,
                         isFixtureCorrect,
                     }
                 )

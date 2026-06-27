@@ -46,7 +46,7 @@ export async function GET(
 
     const [predictions, bracketPicks, scoreRows, finishedMatchesData, liveMatchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*').in('user_id', memberIds)),
-        fetchAllRows(supabase.from('bracket_picks').select('*').in('user_id', memberIds)),
+        fetchAllRows(supabase.from('live_ko_picks').select('*').in('user_id', memberIds)),
         fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points').in('user_id', memberIds)),
         fetchAllRows(supabase.from('matches').select('*').eq('status', 'finished')),
         fetchAllRows(
@@ -126,10 +126,11 @@ export async function GET(
 
             if (typeof effPredHome !== 'number' || typeof effPredAway !== 'number') continue
 
-            const isFixtureCorrect = !ko ||
-                !pred.predicted_home_team ||
-                !pred.predicted_away_team ||
-                (pred.predicted_home_team === effHome && pred.predicted_away_team === effAway)
+            const isFixtureCorrect = ko
+                ? true
+                : !pred.predicted_home_team ||
+                    !pred.predicted_away_team ||
+                    (pred.predicted_home_team === effHome && pred.predicted_away_team === effAway)
 
             const result = scoreMatch(effPredHome, effPredAway, hScore, aScore, ko, {
                 predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
