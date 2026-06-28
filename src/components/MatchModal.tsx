@@ -77,8 +77,9 @@ interface LeaderboardEntry {
     display_name: string
     avatar_initials: string
     avatar_color: string
-    predicted_home: number
-    predicted_away: number
+    predicted_home: number | null
+    predicted_away: number | null
+    team_code?: string
     points: number | null
     isExact: boolean
 }
@@ -144,7 +145,7 @@ export default function MatchModal({
                 const dbMatch = ALL_MATCHES.find(m => m.id === localMatchId)
                 const isKoMatch = dbMatch ? ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(dbMatch.group_label) : false
                 
-                const res = scoreMatch(u.predicted_home, u.predicted_away, hScore, aScore, isKoMatch)
+                const res = scoreMatch(u.predicted_home ?? -1, u.predicted_away ?? -1, hScore, aScore, isKoMatch)
                 points = res.total
                 isExact = res.type === 'exact'
             }
@@ -385,7 +386,11 @@ export default function MatchModal({
                                     </span>
                                     
                                     <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: 'var(--dim)', paddingRight: 10 }}>
-                                        {u.predicted_home} - {u.predicted_away}
+                                        {u.predicted_home !== null && u.predicted_away !== null 
+                                            ? `${u.predicted_home} - ${u.predicted_away}`
+                                            : u.team_code 
+                                                ? <span style={{fontSize: 12, textTransform: 'uppercase'}}>{u.team_code} advances</span>
+                                                : '-'}
                                     </span>
                                     
                                     <span style={{ fontSize: 13, fontWeight: 700, minWidth: 48, textAlign: 'right', color: u.points === null ? 'var(--muted)' : u.isExact ? 'var(--gold)' : 'var(--green-bright)' }}>

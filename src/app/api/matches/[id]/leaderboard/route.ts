@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllRows } from '@/lib/supabase/pagination'
 import { scoreMatch } from '@/lib/scoring'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
@@ -28,9 +28,9 @@ const NAME_TO_CODE: Record<string, string> = {
 function getKnockoutPickSlot(matchId: string): { round: string; slotIndex: number } | null {
     if (matchId === 'final') return { round: 'final', slotIndex: 0 }
     if (matchId === 'third_place') return { round: 'third_place', slotIndex: 0 }
-    const match = matchId.match(/^([a-z0-9]+)_(\d+)$/)
+    const match = matchId.match(/^([a-zA-Z0-9]+)_(\d+)$/)
     if (!match) return null
-    return { round: match[1], slotIndex: Number(match[2]) - 1 }
+    return { round: match[1].toLowerCase(), slotIndex: Number(match[2]) - 1 }
 }
 
 export async function GET(
@@ -40,17 +40,17 @@ export async function GET(
     const { id } = await params
 
     // 1. Find the local match definition
-    const localMatch = ALL_MATCHES.find(m => m.id === id)
+    const localMatch = ALL_MATCHES.find(m => m.id.toLowerCase() === id.toLowerCase())
     if (!localMatch) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
-    const isKnockout = KNOCKOUT_MATCHES.some(m => m.id === id)
+    const isKnockout = KNOCKOUT_MATCHES.some(m => m.id.toLowerCase() === id.toLowerCase())
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // 2. Fetch match from DB
     const { data: dbMatch } = await supabase
         .from('matches')
         .select('home_team, away_team, home_score, away_score, status, qualifier')
-        .eq('id', id)
+        .eq('id', localMatch.id)
         .single()
 
     let effectiveHomeScore: number | null = dbMatch?.home_score ?? null
@@ -105,26 +105,37 @@ export async function GET(
         typeof effectiveAwayScore === 'number'
 
     if (isKnockout) {
-        const slot = getKnockoutPickSlot(id)
+        const slot = getKnockoutPickSlot(localMatch.id)
         if (!slot) return NextResponse.json({ error: 'Unsupported knockout match id' }, { status: 400 })
 
         const bracketPicks = await fetchAllRows(
             supabase
                 .from('live_ko_picks')
-                .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, user_id, profile:profiles(display_name, avatar_initials, avatar_color)')
+                .select('home_score, away_score, team_code, predicted_home_team, predicted_away_team, user_id')
                 .eq('round', slot.round)
                 .eq('slot_index', slot.slotIndex)
-                .not('home_score', 'is', null)
-                .not('away_score', 'is', null)
         )
 
+        const userIds = bracketPicks.map(p => p.user_id)
+        let profiles: any[] = []
+        if (userIds.length > 0) {
+            profiles = await fetchAllRows(
+                supabase
+                    .from('profiles')
+                    .select('id, display_name, avatar_initials, avatar_color')
+                    .in('id', userIds)
+            )
+        }
+        
+        const profileMap = new Map(profiles.map(p => [p.id, p]))
+
         const leaderboard = (bracketPicks ?? []).map(p => {
-            const profile = Array.isArray(p.profile) ? p.profile[0] : p.profile
+            const profile = profileMap.get(p.user_id)
             const isFixtureCorrect = true
             const scoreResult = hasScore
                 ? scoreMatch(
-                    p.home_score,
-                    p.away_score,
+                    p.home_score ?? -1,
+                    p.away_score ?? -1,
                     effectiveHomeScore!,
                     effectiveAwayScore!,
                     true,
@@ -142,8 +153,9 @@ export async function GET(
                 display_name: profile?.display_name ?? 'Unknown',
                 avatar_initials: profile?.avatar_initials ?? '??',
                 avatar_color: profile?.avatar_color ?? '#cccccc',
-                predicted_home: p.home_score,
-                predicted_away: p.away_score,
+                predicted_home: p.home_score ?? null,
+                predicted_away: p.away_score ?? null,
+                team_code: p.team_code ?? null,
                 points: scoreResult?.total ?? null,
                 isExact: scoreResult?.type === 'exact',
             }

@@ -37,9 +37,9 @@ function formatPlaceholder(code: string): string {
 function getKnockoutPickSlot(matchId: string): { round: string; slotIndex: number } | null {
     if (matchId === 'final') return { round: 'final', slotIndex: 0 }
     if (matchId === 'third_place') return { round: 'third_place', slotIndex: 0 }
-    const match = matchId.match(/^([a-z0-9]+)_(\d+)$/)
+    const match = matchId.match(/^([a-zA-Z0-9]+)_(\d+)$/)
     if (!match) return null
-    return { round: match[1], slotIndex: Number(match[2]) - 1 }
+    return { round: match[1].toLowerCase(), slotIndex: Number(match[2]) - 1 }
 }
 
 interface FixturesClientProps {
@@ -114,7 +114,6 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 away_team: dbMatch?.away_team ?? m.away_team,
                 kickoff: dbMatch?.kickoff ?? m.kickoff,
                 qualifier: dbMatch?.qualifier ?? m.qualifier,
-                stage: dbMatch?.stage ?? m.stage,
                 dbStatus: status,
                 actualHomeScore: hScore,
                 actualAwayScore: aScore,
