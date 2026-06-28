@@ -48,8 +48,25 @@ const QF_POSITIONS = [1.5, 5.5]
 const SF_POSITIONS = [3.5]
 const FINAL_POSITIONS = [3.05, 4.05]
 
+const LEFT_R32_FIXTURE_IDS = ['r32_3', 'r32_6', 'r32_1', 'r32_4', 'r32_12', 'r32_11', 'r32_10', 'r32_9'] as const
+const LEFT_R16_FIXTURE_IDS = ['r16_2', 'r16_1', 'r16_5', 'r16_6'] as const
+const LEFT_QF_FIXTURE_IDS = ['qf_1', 'qf_2'] as const
+const LEFT_SF_FIXTURE_IDS = ['sf_1'] as const
+
+const RIGHT_R32_FIXTURE_IDS = ['r32_2', 'r32_5', 'r32_7', 'r32_8', 'r32_15', 'r32_14', 'r32_13', 'r32_16'] as const
+const RIGHT_R16_FIXTURE_IDS = ['r16_3', 'r16_4', 'r16_7', 'r16_8'] as const
+const RIGHT_QF_FIXTURE_IDS = ['qf_3', 'qf_4'] as const
+const RIGHT_SF_FIXTURE_IDS = ['sf_2'] as const
+const CENTER_FIXTURE_IDS = ['final', 'third_place'] as const
+
 function pickKey(fixture: LiveBracketFixture) {
     return `${fixture.round}_${fixture.slotIndex}`
+}
+
+function orderedFixtures(fixturesById: Map<string, LiveBracketFixture>, ids: readonly string[]) {
+    return ids
+        .map(id => fixturesById.get(id))
+        .filter((fixture): fixture is LiveBracketFixture => Boolean(fixture))
 }
 
 function formatKickoff(value: string) {
@@ -477,15 +494,19 @@ export default function LiveBracketClient({
     const [saving, setSaving] = useState(false)
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const byRound = useMemo(() => {
-        const grouped: Record<KnockoutRound, LiveBracketFixture[]> = {
-            r32: [], r16: [], qf: [], sf: [], third_place: [], final: [],
+    const bracketColumns = useMemo(() => {
+        const fixturesById = new Map(fixtures.map(fixture => [fixture.id, fixture]))
+        return {
+            leftR32: orderedFixtures(fixturesById, LEFT_R32_FIXTURE_IDS),
+            leftR16: orderedFixtures(fixturesById, LEFT_R16_FIXTURE_IDS),
+            leftQf: orderedFixtures(fixturesById, LEFT_QF_FIXTURE_IDS),
+            leftSf: orderedFixtures(fixturesById, LEFT_SF_FIXTURE_IDS),
+            center: orderedFixtures(fixturesById, CENTER_FIXTURE_IDS),
+            rightSf: orderedFixtures(fixturesById, RIGHT_SF_FIXTURE_IDS),
+            rightQf: orderedFixtures(fixturesById, RIGHT_QF_FIXTURE_IDS),
+            rightR16: orderedFixtures(fixturesById, RIGHT_R16_FIXTURE_IDS),
+            rightR32: orderedFixtures(fixturesById, RIGHT_R32_FIXTURE_IDS),
         }
-        for (const fixture of fixtures) grouped[fixture.round].push(fixture)
-        for (const round of Object.keys(grouped) as KnockoutRound[]) {
-            grouped[round].sort((a, b) => a.slotIndex - b.slotIndex)
-        }
-        return grouped
     }, [fixtures])
 
     const availableCount = fixtures.filter(fixture => {
@@ -658,56 +679,56 @@ export default function LiveBracketClient({
                                 </div>
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.r32}
-                                    fixtures={byRound.r32.slice(0, 8)}
+                                    fixtures={bracketColumns.leftR32}
                                     positions={LEFT_R32_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.r16}
-                                    fixtures={byRound.r16.slice(0, 4)}
+                                    fixtures={bracketColumns.leftR16}
                                     positions={R16_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.qf}
-                                    fixtures={byRound.qf.slice(0, 2)}
+                                    fixtures={bracketColumns.leftQf}
                                     positions={QF_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.sf}
-                                    fixtures={byRound.sf.slice(0, 1)}
+                                    fixtures={bracketColumns.leftSf}
                                     positions={SF_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title="Final"
-                                    fixtures={[...byRound.final, ...byRound.third_place]}
+                                    fixtures={bracketColumns.center}
                                     positions={FINAL_POSITIONS}
                                     tone="final"
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.sf}
-                                    fixtures={byRound.sf.slice(1, 2)}
+                                    fixtures={bracketColumns.rightSf}
                                     positions={SF_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.qf}
-                                    fixtures={byRound.qf.slice(2, 4)}
+                                    fixtures={bracketColumns.rightQf}
                                     positions={QF_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.r16}
-                                    fixtures={byRound.r16.slice(4, 8)}
+                                    fixtures={bracketColumns.rightR16}
                                     positions={R16_POSITIONS}
                                     {...bracketColumnProps}
                                 />
                                 <CompactBracketColumn
                                     title={ROUND_LABELS.r32}
-                                    fixtures={byRound.r32.slice(8, 16)}
+                                    fixtures={bracketColumns.rightR32}
                                     positions={LEFT_R32_POSITIONS}
                                     {...bracketColumnProps}
                                 />
