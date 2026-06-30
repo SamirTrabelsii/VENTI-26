@@ -28,17 +28,12 @@ export async function GET() {
         let prediction = predictions?.find(p => p.match_id === match.id)
         
         if (prediction && typeof prediction.home_score === 'number' && typeof prediction.away_score === 'number') {
-            const predHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number' ? prediction.original_home_score : prediction.home_score
-            const predAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number' ? prediction.original_away_score : prediction.away_score
-
-            const isFixtureCorrect = !isKnockout || !prediction.predicted_home_team || !prediction.predicted_away_team || (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
+            const predHome = prediction.home_score
+            const predAway = prediction.away_score
 
             const options = {
                 predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
                 realQualifier: match.qualifier || null,
-                isRepredicted: !!prediction.is_repredicted,
-                multiplier: match.multiplier || 1,
-                isFixtureCorrect,
             }
 
             const res = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, options)

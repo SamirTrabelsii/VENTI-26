@@ -30,11 +30,11 @@ describe('scoreMatch', () => {
         assert.equal(close.type, 'partial')
         assert.deepEqual(close.breakdown, [
             { rule: 'Draw/win close-score bonus', pts: 5 },
-            { rule: 'Goal-Goal/No Goal bonus', pts: 3 },
+            { rule: 'Both teams scored / clean sheet bonus', pts: 3 },
         ])
         assert.equal(wider.total, 3)
         assert.deepEqual(wider.breakdown, [
-            { rule: 'Goal-Goal/No Goal bonus', pts: 3 },
+            { rule: 'Both teams scored / clean sheet bonus', pts: 3 },
         ])
     })
 
@@ -44,7 +44,7 @@ describe('scoreMatch', () => {
         assert.equal(result.total, 3)
         assert.equal(result.type, 'partial')
         assert.deepEqual(result.breakdown, [
-            { rule: 'Goal-Goal/No Goal bonus', pts: 3 },
+            { rule: 'Both teams scored / clean sheet bonus', pts: 3 },
         ])
     })
 
@@ -58,28 +58,24 @@ describe('scoreMatch', () => {
     it('adds knockout advancing-team points regardless of scoreline accuracy', () => {
         assert.equal(
             scoreMatch(2, 1, 2, 1, true, { predQualifier: 'ARG', realQualifier: 'ARG' }).total,
-            30,
+            35,
         )
         assert.equal(
             scoreMatch(2, 1, 1, 2, true, { predQualifier: 'ARG', realQualifier: 'ARG' }).total,
-            8,
+            13,
         )
     })
 
-    it('keeps original knockout multipliers as a supplement', () => {
+    it('adds only the knockout qualifier supplement when the advancing team is correct', () => {
         const result = scoreMatch(2, 1, 2, 1, true, {
             predQualifier: 'ARG',
             realQualifier: 'ARG',
-            isRepredicted: false,
-            isFixtureCorrect: true,
-            multiplier: 2,
         })
 
-        assert.equal(result.total, 60)
+        assert.equal(result.total, 35)
         assert.deepEqual(result.breakdown, [
             { rule: 'Perfect prediction', pts: 25 },
-            { rule: 'Correct advancing team (knockout)', pts: 5 },
-            { rule: 'Original Prediction Multiplier (x2)', pts: 30 },
+            { rule: 'Correct advancing team (knockout)', pts: 10 },
         ])
     })
 })

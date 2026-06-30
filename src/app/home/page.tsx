@@ -1,12 +1,11 @@
+// src/app/home/page.tsx
 import { createClient } from '@/lib/supabase/server'
-import { GROUP_MATCHES, TOURNAMENT_LOCK } from '@/lib/wc2026-data'
+import { GROUP_MATCHES, TOURNAMENT_LOCK, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 import Link from 'next/link'
 import Image from 'next/image'
-import { redirect } from 'next/navigation'
 import Nav from '@/components/Nav'
 import LiveMatches from '@/components/LiveMatches'
 import LiveLeaderboard from '@/components/LiveLeaderboard'
-import type { Score } from '@/types'
 import { SCORING_REFERENCE } from '@/lib/scoring'
 import QuickActions from '@/components/QuickActions'
 import FAQSection from '@/components/FAQSection'
@@ -14,50 +13,92 @@ import LockBanner from '@/components/LockBanner'
 import MotionDiv from '@/components/MotionDiv'
 import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
 import DynamicHomeStats from '@/components/DynamicHomeStats'
+import { fetchAllRows } from '@/lib/supabase/pagination'
+import { computeFreshScores, normalizeBracketPickForScoring } from '@/lib/fresh-scores'
+
+const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
 export default async function HomePage() {
     const supabase = await createClient()
-
     const { data: { user } } = await supabase.auth.getUser()
-    // ── DB Fetch (Graceful for Guests) ────────────────────────────────────────
+
     let profile = null
     let myGroups: any[] = []
     let preds: any[] = []
+    let bracketPicks: any[] = []
     let predCount = 0
     let bracketCount = 0
-    let scores: Score[] = []
-    let myScore: Score | null = null
     let firstGroupId: string | null = null
     let firstGroupName: string | null = null
-    const dbMatchStatusMap = new Map<string, string>()
+    let groupScores: any[] = []
+    let myRank: number | null = null
+
+    // Fresh score fields — computed live, never from stale scores table
+    let freshPoints = 0
+    let freshExact = 0
+    let freshCorrect = 0
+    let freshStreak = 0
+    let scoredMatchIds: string[] = []
+    let dbMatches: any[] = []
 
     if (user) {
         const [
             { data: pData },
             { data: mgData },
             { data: pRows, count: pCount },
-            { count: bCount },
-            { data: dbMatchesData },
+            { data: bRows, count: bCount },
+            matchesData,
         ] = await Promise.all([
             supabase.from('profiles').select('*').eq('id', user.id).single(),
-            supabase.from('group_members').select('group_id, groups(id, name, description)').eq('user_id', user.id).limit(3),
-            supabase.from('predictions').select('*', { count: 'exact' }).eq('user_id', user.id),
-            supabase.from('bracket_picks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-            supabase.from('matches').select('id, status'),
+            supabase.from('group_members')
+                .select('group_id, groups(id, name, description)')
+                .eq('user_id', user.id)
+                .limit(3),
+            supabase.from('predictions')
+                .select('*', { count: 'exact' })
+                .eq('user_id', user.id),
+            supabase.from('live_ko_picks')
+                .select('*', { count: 'exact' })
+                .eq('user_id', user.id),
+            fetchAllRows(
+                supabase.from('matches')
+                    .select('*')
+            ),
         ])
-        
+
         profile = pData
         myGroups = mgData || []
         preds = pRows || []
+        bracketPicks = (bRows || []).map(normalizeBracketPickForScoring)
         predCount = pCount || 0
         bracketCount = bCount || 0
 
-        const dbMatches = dbMatchesData || []
-        dbMatches.forEach((m: any) => dbMatchStatusMap.set(m.id, m.status))
-
         firstGroupId = myGroups?.[0]?.group_id ?? null
-        firstGroupName = (myGroups?.[0]?.groups as unknown as { name: string })?.name ?? null
+        firstGroupName = (myGroups?.[0]?.groups as any)?.name ?? null
 
+        dbMatches = matchesData || []
+
+        // Compute fresh scores from finished DB matches
+        const finishedMatches = dbMatches
+            .filter((m: any) => m.home_score !== null && m.away_score !== null)
+            .sort((a: any, b: any) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+
+        scoredMatchIds = finishedMatches.map((m: any) => m.id)
+
+        const scoresMap = computeFreshScores(
+            [user.id],
+            finishedMatches,
+            preds,
+            bRows || [],
+        )
+
+        const myFresh = scoresMap.get(user.id)
+        freshPoints = myFresh?.total_points ?? 0
+        freshExact = myFresh?.exact_scores ?? 0
+        freshCorrect = myFresh?.correct_results ?? 0
+        freshStreak = myFresh?.streak ?? 0
+
+        // Fetch group leaderboard for the first group
         if (firstGroupId) {
             const { data } = await supabase
                 .from('scores')
@@ -65,52 +106,29 @@ export default async function HomePage() {
                 .eq('group_id', firstGroupId)
                 .order('total_points', { ascending: false })
                 .limit(10)
-            scores = data ?? []
-            myScore = scores.find(s => s.user_id === user.id) ?? null
-        }
-
-        // Fetch the user's global score — take MAX across all group rows
-        // (after recalculation they should all be equal, but this is defensive)
-        if (!myScore) {
-            const { data: allUserScores } = await supabase
-                .from('scores')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('total_points', { ascending: false })
-                .limit(1)
-            if (allUserScores && allUserScores.length > 0) myScore = allUserScores[0]
+            groupScores = data ?? []
+            myRank = (groupScores.findIndex(s => s.user_id === user.id) + 1) || null
         }
     }
 
-    // ── Countdown ──────────────────────────────────────────────────────────────
+    // ── Countdown ─────────────────────────────────────────────────────────────
     const kickoff = new Date(TOURNAMENT_LOCK)
     const now = new Date()
     const diffMs = Math.max(0, kickoff.getTime() - now.getTime())
     const tournamentStarted = diffMs === 0
-    const daysSinceStart = tournamentStarted ? Math.floor((now.getTime() - kickoff.getTime()) / 86400000) : 0
+    const daysSinceStart = tournamentStarted
+        ? Math.floor((now.getTime() - kickoff.getTime()) / 86400000)
+        : 0
     const days = Math.floor(diffMs / 86400000)
     const hours = Math.floor((diffMs % 86400000) / 3600000)
     const mins = Math.floor((diffMs % 3600000) / 60000)
 
-    // ── Progress ───────────────────────────────────────────────────────────────
-    const groupTotal = GROUP_MATCHES.length          // 72 group stage matches
-    const knockoutTotal = 32                         // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
+    // ── Progress ──────────────────────────────────────────────────────────────
+    const groupTotal = GROUP_MATCHES.length   // 72
+    const knockoutTotal = 32
     const totalMatches = groupTotal + knockoutTotal  // 104
-    const groupPreds = predCount ?? 0
-    const bracketPreds = bracketCount ?? 0
-    const totalPreds = groupPreds + bracketPreds
-    const groupPct = Math.min(100, Math.round((groupPreds / groupTotal) * 100))
+    const totalPreds = predCount + bracketCount
     const overallPct = Math.min(100, Math.round((totalPreds / totalMatches) * 100))
-
-    // ── Accuracy ───────────────────────────────────────────────────────────────
-    const myExact = myScore?.exact_scores ?? 0
-    const myCorrect = myScore?.correct_results ?? 0
-    const myStreak = myScore?.streak ?? 0
-
-    // ── My rank in first group ─────────────────────────────────────────────────
-    const myRank = myScore && user
-        ? scores.findIndex(s => s.user_id === user.id) + 1
-        : null
 
     const isGuest = !user
     const displayName = profile?.display_name ?? profile?.email ?? (isGuest ? 'Explorer' : 'Player')
@@ -120,26 +138,17 @@ export default async function HomePage() {
             <Nav initials={profile?.avatar_initials ?? 'PL'} displayName={displayName} isGuest={isGuest} />
 
             {/* ── HERO ── */}
-            <MotionDiv 
+            <MotionDiv
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
                 style={{ position: 'relative', overflow: 'hidden', paddingTop: 64 }}
             >
-                {/* Immersive Dark Background */}
                 <div className="absolute inset-0 pointer-events-none -z-10">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[var(--black)] to-[var(--black)]" />
                 </div>
-
-                <div style={{
-                    position: 'absolute', inset: 0, pointerEvents: 'none',
-                    background: 'radial-gradient(ellipse 80% 50% at 50% -5%, rgba(212,168,67,0.15) 0%, transparent 70%)',
-                }} />
-                <div style={{
-                    position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.02,
-                    backgroundImage: 'linear-gradient(var(--cream) 1px,transparent 1px),linear-gradient(90deg,var(--cream) 1px,transparent 1px)',
-                    backgroundSize: '52px 52px',
-                }} />
+                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 80% 50% at 50% -5%, rgba(212,168,67,0.15) 0%, transparent 70%)' }} />
+                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.02, backgroundImage: 'linear-gradient(var(--cream) 1px,transparent 1px),linear-gradient(90deg,var(--cream) 1px,transparent 1px)', backgroundSize: '52px 52px' }} />
 
                 <div className="px-5 py-8 md:px-10 md:py-12 relative max-w-[1400px] mx-auto">
                     <div className="flex flex-col lg:flex-row items-start justify-between gap-8 flex-wrap">
@@ -153,46 +162,38 @@ export default async function HomePage() {
                                 PREDICT.<br /><span className="gradient-text">COMPETE.</span><br />CONQUER.
                             </h1>
                             <p style={{ marginTop: 14, fontSize: 15, color: 'var(--dim)', maxWidth: 380, lineHeight: 1.7 }}>
-                                Lock in your group stage scores, build your knockout bracket, and climb the global leaderboards.
+                                Lock in your group stage scores, predict knockout matches live, and climb the global leaderboards.
                             </p>
                             <div style={{ marginTop: 24, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                {groupPreds === 0 && (
-                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}>
+                                {predCount === 0 && (
+                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14 }}>
                                         Start Predicting →
                                     </Link>
                                 )}
-                                {groupPreds > 0 && groupPreds < groupTotal && (
-                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}>
+                                {predCount > 0 && predCount < groupTotal && (
+                                    <Link href="/predict" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14 }}>
                                         Continue Predicting →
                                     </Link>
                                 )}
-                                {groupPreds === groupTotal && bracketPreds === 0 && (
-                                    <Link href="/bracket" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, transition: 'all 0.2s', boxShadow: '0 0 15px rgba(212,168,67,0.4)' }}>
-                                        Build Knockout Bracket →
+                                {predCount === groupTotal && bracketCount === 0 && (
+                                    <Link href="/live-bracket" className="hover-glow" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', background: 'var(--gold)', color: '#0a0a0a', fontWeight: 700, fontSize: 14, boxShadow: '0 0 15px rgba(212,168,67,0.4)' }}>
+                                        Predict Knockout Matches →
                                     </Link>
                                 )}
-                                {groupPreds === groupTotal && bracketPreds > 0 && (
-                                    <Link href="/predict" className="bg-[var(--surface2)] hover:bg-[var(--surface3)]" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontWeight: 500, fontSize: 14, transition: 'all 0.2s' }}>
-                                        Review Predictions
+                                {predCount === groupTotal && bracketCount > 0 && (
+                                    <Link href="/live-bracket" style={{ padding: '13px 28px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontWeight: 500, fontSize: 14 }}>
+                                        View Live Bracket
                                     </Link>
                                 )}
-                                
-                                <Link href="/groups" className="bg-[var(--surface2)] hover:bg-[var(--surface3)]" style={{ padding: '13px 20px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: 14, fontWeight: 500, transition: 'all 0.2s' }}>
+                                <Link href="/groups" style={{ padding: '13px 20px', borderRadius: 12, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: 14, fontWeight: 500 }}>
                                     Invite Friends
                                 </Link>
                             </div>
                         </div>
 
-                        {/* Trophy Visual */}
+                        {/* Trophy */}
                         <div className="hidden lg:block relative flex-shrink-0 w-[240px] h-[300px] -mt-10 opacity-90 drop-shadow-[0_0_40px_rgba(212,168,67,0.3)]">
-                            <Image
-                                src="/images/trophy.png"
-                                alt="World Cup Trophy"
-                                fill
-                                sizes="(max-width: 1024px) 100vw, 240px"
-                                style={{ objectFit: 'contain' }}
-                                priority
-                            />
+                            <Image src="/images/trophy.png" alt="World Cup Trophy" fill sizes="(max-width: 1024px) 100vw, 240px" style={{ objectFit: 'contain' }} priority />
                         </div>
 
                         {/* Countdown + progress */}
@@ -234,8 +235,7 @@ export default async function HomePage() {
                                 </>
                             )}
 
-                            {/* Overall predictions progress */}
-                            <div style={{ overflowX: 'auto', paddingBottom: 60, WebkitOverflowScrolling: 'touch' }}>
+                            <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
                                     <span>Total predictions</span>
                                     <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--gold)' }}>{overallPct}%</span>
@@ -252,23 +252,28 @@ export default async function HomePage() {
             </MotionDiv>
 
             {/* ── STAT CARDS ── */}
-            <MotionDiv 
+            <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                 className="max-w-[1400px] mx-auto px-5 pb-7 md:px-10 md:pb-7"
             >
                 <LockBanner />
                 <DynamicHomeStats
-                    myScore={myScore}
+                    freshPoints={freshPoints}
+                    freshExact={freshExact}
+                    freshCorrect={freshCorrect}
+                    freshStreak={freshStreak}
+                    scoredMatchIds={scoredMatchIds}
                     predictions={preds}
-                    groupPreds={groupPreds}
-                    bracketPreds={bracketPreds}
+                    bracketPicks={bracketPicks}
+                    dbMatches={dbMatches}
+                    groupPreds={predCount}
+                    bracketPreds={bracketCount}
                     totalMatches={totalMatches}
                     myGroupsLength={myGroups.length}
                     firstGroupName={firstGroupName}
                     myRank={myRank}
-                    dbMatchStatuses={Object.fromEntries(dbMatchStatusMap)}
                 />
             </MotionDiv>
 
@@ -276,7 +281,7 @@ export default async function HomePage() {
             <div className="max-w-[1400px] mx-auto px-5 pb-16 md:px-10 md:pb-[60px] grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
 
                 {/* Left */}
-                <MotionDiv 
+                <MotionDiv
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
@@ -284,10 +289,9 @@ export default async function HomePage() {
                 >
                     <QuickActions actions={[
                         { href: '/groups', icon: '👥', label: 'Groups & Leagues', sub: 'Compete against your friends' },
-                        { href: '/profile', icon: '🏆', label: 'My Profile', sub: 'Stats, badges & match history' }
+                        { href: '/profile', icon: '🏆', label: 'My Profile', sub: 'Stats, badges & match history' },
                     ]} />
 
-                    {/* Live matches */}
                     <div className="relative overflow-hidden rounded-[18px] p-6 border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
                         <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ background: 'radial-gradient(circle at center, var(--gold), transparent 80%)' }} />
                         <div className="relative z-10">
@@ -295,7 +299,6 @@ export default async function HomePage() {
                         </div>
                     </div>
 
-                    {/* Scoring formula */}
                     <div className="relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
                         <div className="flex items-center gap-2 px-5 py-4">
                             <span className="text-base">📐</span>
@@ -307,18 +310,15 @@ export default async function HomePage() {
                             </div>
                         </div>
                     </div>
-
                 </MotionDiv>
 
                 {/* Right */}
-                <MotionDiv 
+                <MotionDiv
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.6, delay: 0.4 }}
                     style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
                 >
-
-                    {/* Live leaderboard */}
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -333,7 +333,7 @@ export default async function HomePage() {
                         </div>
 
                         {firstGroupId && user ? (
-                            <LiveLeaderboard groupId={firstGroupId} currentUserId={user.id} initialScores={scores} />
+                            <LiveLeaderboard groupId={firstGroupId} currentUserId={user.id} initialScores={groupScores} />
                         ) : (
                             <div style={{ padding: '32px 20px', textAlign: 'center' }}>
                                 <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
@@ -345,7 +345,6 @@ export default async function HomePage() {
                         )}
                     </div>
 
-                    {/* Palmares teaser */}
                     <div style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.10) 0%, rgba(212,168,67,0.03) 100%)', border: '1px solid var(--border-gold)', borderRadius: 18, padding: '20px 22px', textAlign: 'center' }}>
                         <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
                         <div style={{ fontFamily: 'Bebas Neue', fontSize: 24, color: 'var(--gold)', marginBottom: 4 }}>The Palmares Room</div>
@@ -356,7 +355,6 @@ export default async function HomePage() {
                             Enter →
                         </Link>
                     </div>
-
                 </MotionDiv>
             </div>
 

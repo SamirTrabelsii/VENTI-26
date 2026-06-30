@@ -20,25 +20,17 @@ export async function GET() {
         
         const isKnockout = m.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(m.stage) : false
         
-        const effHome = !p.is_repredicted && typeof p.original_home_score === 'number' ? p.original_home_score : p.home_score
-        const effAway = !p.is_repredicted && typeof p.original_away_score === 'number' ? p.original_away_score : p.away_score
-        
-        const isFixCor = !isKnockout || !p.predicted_home_team || !p.predicted_away_team || (p.predicted_home_team === m.home_team && p.predicted_away_team === m.away_team)
+        const effHome = p.home_score
+        const effAway = p.away_score
         
         const res = scoreMatch(effHome, effAway, m.home_score, m.away_score, isKnockout, {
             predQualifier: p.qualifier || p.qualifier_pick || p.team_code,
             realQualifier: m.qualifier,
-            isRepredicted: !!p.is_repredicted,
-            multiplier: m.multiplier || 1,
-            isFixtureCorrect: isFixCor
         })
         
         const profRes = scoreMatch(effHome, effAway, m.home_score, m.away_score, isKnockout, {
             predQualifier: p.qualifier,
             realQualifier: m.qualifier,
-            isRepredicted: !!p.is_repredicted,
-            multiplier: m.multiplier ?? 1,
-            isFixtureCorrect: isFixCor
         })
         
         out.push({ match: m.id, backend: res.total, profile: profRes.total, realHome: m.home_score, realAway: m.away_score, predHome: effHome, predAway: effAway })

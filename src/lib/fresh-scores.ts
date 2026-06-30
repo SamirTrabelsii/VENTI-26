@@ -1,3 +1,12 @@
+// src/lib/fresh-scores.ts
+//
+// Computes per-user score totals from raw prediction data.
+// Single source of truth for leaderboard and profile calculations.
+//
+// Scoring rules (see scoring.ts for full breakdown):
+//   Group stage  : coreScore only
+//   Knockout     : coreScore + +10 if correct qualifier (team_code vs matches.qualifier)
+
 import { scoreMatch } from '@/lib/scoring'
 
 export interface FreshScoreTotals {
@@ -7,59 +16,65 @@ export interface FreshScoreTotals {
     streak: number
 }
 
-function isKnockoutMatch(match: any) {
-    return match.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage) : false
+function isKnockoutMatch(match: any): boolean {
+    return match.stage
+        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
+        : false
 }
 
-export function matchIdForPick(pick: any) {
+// ── Bracket pick helpers ───────────────────────────────────────────────────────
+
+export function matchIdForPick(pick: any): string {
     if (pick.round === 'final' || pick.round === 'third_place') return pick.round
     return `${pick.round}_${pick.slot_index + 1}`
 }
 
 export function normalizeBracketPickForScoring(pick: any) {
-    const matchId = matchIdForPick(pick)
     return {
         ...pick,
-        match_id: matchId,
+        match_id: matchIdForPick(pick),
+        // team_code is the user's qualifier pick — used for the +10 knockout bonus
         qualifier_pick: pick.team_code,
     }
 }
 
+// ── Main scoring function ──────────────────────────────────────────────────────
+
 export function computeFreshScores(
     userIds: string[],
     finishedMatches: any[],
-    predictions: any[],
-    bracketPicks: any[],
-    bracketBonusByUser: Map<string, number> = new Map(),
-) {
-    const predictionByUserMatch = new Map<string, any>()
-    for (const p of predictions) predictionByUserMatch.set(`${p.user_id}:${p.match_id}`, p)
+    predictions: any[],           // from `predictions` table (group stage)
+    bracketPicks: any[],          // from `live_ko_picks` table (knockout)
+): Map<string, FreshScoreTotals> {
+
+    // Build a single lookup: "userId:matchId" → prediction row
+    const predByUserMatch = new Map<string, any>()
+    for (const p of predictions) {
+        predByUserMatch.set(`${p.user_id}:${p.match_id}`, p)
+    }
     for (const bp of bracketPicks) {
-        const normalizedPick = normalizeBracketPickForScoring(bp)
-        predictionByUserMatch.set(`${normalizedPick.user_id}:${normalizedPick.match_id}`, normalizedPick)
+        const normalized = normalizeBracketPickForScoring(bp)
+        predByUserMatch.set(`${normalized.user_id}:${normalized.match_id}`, normalized)
     }
 
     const totals = new Map<string, FreshScoreTotals>()
 
     for (const userId of userIds) {
-        let total_points = bracketBonusByUser.get(userId) ?? 0
+        let total_points = 0
         let exact_scores = 0
         let correct_results = 0
         let streak = 0
 
         for (const match of finishedMatches) {
-            const prediction = predictionByUserMatch.get(`${userId}:${match.id}`)
+            const prediction = predByUserMatch.get(`${userId}:${match.id}`)
+
             if (!prediction) {
                 streak = 0
                 continue
             }
 
-            const predHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number'
-                ? prediction.original_home_score
-                : prediction.home_score
-            const predAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number'
-                ? prediction.original_away_score
-                : prediction.away_score
+            const predHome = prediction.home_score
+            const predAway = prediction.away_score
 
             if (typeof predHome !== 'number' || typeof predAway !== 'number') {
                 streak = 0
@@ -67,27 +82,30 @@ export function computeFreshScores(
             }
 
             const isKnockout = isKnockoutMatch(match)
-            const isFixtureCorrect = isKnockout
-                ? true
-                : !prediction.predicted_home_team ||
-                    !prediction.predicted_away_team ||
-                    (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
 
-            const result = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, {
-                predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
-                realQualifier: match.qualifier || null,
-                isRepredicted: !!prediction.is_repredicted,
-                multiplier: match.multiplier || 1,
-                isFixtureCorrect,
-            })
+            const result = scoreMatch(
+                predHome,
+                predAway,
+                match.home_score,
+                match.away_score,
+                isKnockout,
+                {
+                    predQualifier: prediction.qualifier_pick ?? prediction.team_code ?? null,
+                    realQualifier: match.qualifier ?? null,
+                },
+            )
 
             total_points += result.total
 
-            if (result.type === 'exact') exact_scores++
-            if (['exact', 'correct', 'goal_diff'].includes(result.type)) {
+            if (result.type === 'exact') {
+                exact_scores++
+                correct_results++
+                streak++
+            } else if (result.type === 'correct') {
                 correct_results++
                 streak++
             } else {
+                // partial or miss — streak resets, no correct_results increment
                 streak = 0
             }
         }

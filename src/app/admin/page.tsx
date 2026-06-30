@@ -59,7 +59,6 @@ interface ScoringComparison {
         legacy_total: number
         new_match_points?: number
         legacy_match_points?: number
-        bracket_bonus_points?: number
         played_matches?: number
         selected_group_id?: string | null
         delta_new_vs_legacy: number
@@ -955,7 +954,6 @@ function ScoringTab() {
                                         <th style={{ ...th, textAlign: 'right' }}>Current stored</th>
                                         <th style={{ ...th, textAlign: 'right' }}>New formula</th>
                                         <th style={{ ...th, textAlign: 'right' }}>Old formula</th>
-                                        <th style={{ ...th, textAlign: 'right' }}>Bonus</th>
                                         <th style={{ ...th, textAlign: 'right' }}>Current - New</th>
                                         <th style={{ ...th, textAlign: 'right' }}>New - Old</th>
                                     </tr>
@@ -979,7 +977,6 @@ function ScoringTab() {
                                                 {row.legacy_total}
                                                 <div style={{ fontSize: 10, color: 'var(--muted)' }}>match {row.legacy_match_points ?? row.legacy_total}</div>
                                             </td>
-                                            <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{row.bracket_bonus_points ?? 0}</td>
                                             <td style={{ ...td, textAlign: 'right', fontFamily: 'DM Mono, monospace', color: row.delta_current_vs_new === 0 ? 'var(--green-bright)' : '#e05c4a' }}>
                                                 {row.delta_current_vs_new > 0 ? '+' : ''}{row.delta_current_vs_new}
                                             </td>

@@ -1,12 +1,12 @@
+// src/app/api/matches/live/route.ts
 import { NextResponse } from 'next/server'
 
-export const maxDuration = 9 // Vercel Hobby limit is 10s — stay just under
+export const maxDuration = 9
 
 let cachedMatches: any[] = []
 let cacheTimestamp = 0
-const CACHE_TTL_MS = 30_000 // 30 seconds
+const CACHE_TTL_MS = 30_000
 
-// football-data.org team name → local team code
 const NAME_TO_CODE: Record<string, string> = {
     'Mexico': 'MEX', 'South Africa': 'RSA', 'Korea Republic': 'KOR', 'South Korea': 'KOR',
     'Czechia': 'CZE', 'Czech Republic': 'CZE', 'Canada': 'CAN', 'Bosnia-Herzegovina': 'BIH',
@@ -23,17 +23,42 @@ const NAME_TO_CODE: Record<string, string> = {
     'Ghana': 'GHA', 'Panama': 'PAN',
 }
 
+// Returns regulation (90-min) score in fullTime, penalty data separately.
+// football-data.org fullTime includes ET/penalties; regularTime is 90-min only.
+function extractLiveScore(m: any) {
+    const wentToPenalties = m.score?.penalties?.home !== null && m.score?.penalties?.home !== undefined
+    const wentToExtraTime = m.score?.extraTime?.home !== null && m.score?.extraTime?.home !== undefined
+
+    let regHome: number | null = null
+    let regAway: number | null = null
+
+    if (m.score?.regularTime?.home !== null && m.score?.regularTime?.home !== undefined) {
+        regHome = m.score.regularTime.home
+        regAway = m.score.regularTime.away
+    } else if (!wentToPenalties && !wentToExtraTime) {
+        regHome = m.score?.fullTime?.home ?? null
+        regAway = m.score?.fullTime?.away ?? null
+    }
+    // else: contaminated fullTime, leave null — DB has correct value
+
+    return {
+        fullTime: { home: regHome, away: regAway }, // always regulation
+        halfTime: { home: m.score?.halfTime?.home ?? null, away: m.score?.halfTime?.away ?? null },
+        penalties: wentToPenalties
+            ? { home: m.score.penalties.home, away: m.score.penalties.away }
+            : null,
+        went_to_penalties: wentToPenalties,
+    }
+}
+
 export async function GET() {
-    // Serve from cache if fresh
     if (cachedMatches.length > 0 && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
         return NextResponse.json({ matches: cachedMatches, cached: true })
     }
 
-    // ── Try football-data.org first ───────────────────────────────────────────
     try {
         const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
             headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY ?? '' },
-            // Vercel hobby plan has a 10s hard timeout. We must fail fast.
             signal: AbortSignal.timeout(4500),
         })
 
@@ -43,11 +68,12 @@ export async function GET() {
                 const homeCode = NAME_TO_CODE[m.homeTeam?.name] || m.homeTeam?.tla || 'TBD'
                 const awayCode = NAME_TO_CODE[m.awayTeam?.name] || m.awayTeam?.tla || 'TBD'
 
-                // Map football-data status to our internal status
                 let status = m.status
                 if (m.status === 'TIMED' || m.status === 'SCHEDULED') status = 'SCHEDULED'
                 else if (m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'HALFTIME') status = 'IN_PLAY'
                 else if (m.status === 'FINISHED') status = 'FINISHED'
+
+                const scoreData = extractLiveScore(m)
 
                 return {
                     id: m.id,
@@ -68,18 +94,11 @@ export async function GET() {
                         tla: awayCode,
                         crest: m.awayTeam?.crest ?? '',
                     },
-                    score: {
-                        fullTime: {
-                            home: m.score?.fullTime?.home ?? null,
-                            away: m.score?.fullTime?.away ?? null,
-                        },
-                        halfTime: {
-                            home: m.score?.halfTime?.home ?? null,
-                            away: m.score?.halfTime?.away ?? null,
-                        },
-                    },
+                    score: scoreData,
+                    qualifier: m.score?.winner === 'HOME_TEAM' ? homeCode
+                        : m.score?.winner === 'AWAY_TEAM' ? awayCode
+                            : null,
                     goals: [],
-                    // Extra fields for FixturesClient to match by team codes
                     _homeCode: homeCode,
                     _awayCode: awayCode,
                 }
@@ -125,7 +144,10 @@ export async function GET() {
                             away: status === 'SCHEDULED' ? null : (parseInt(g.away_score) || 0),
                         },
                         halfTime: { home: null, away: null },
+                        penalties: null,
+                        went_to_penalties: false,
                     },
+                    qualifier: null,
                     goals: [],
                     _homeCode: homeCode,
                     _awayCode: awayCode,
@@ -140,7 +162,6 @@ export async function GET() {
         console.warn(`[Live API] worldcup26.ir also failed: ${err.message}`)
     }
 
-    // ── Both APIs failed — serve stale cache if available ─────────────────────
     if (cachedMatches.length > 0) {
         return NextResponse.json({ matches: cachedMatches, stale: true })
     }

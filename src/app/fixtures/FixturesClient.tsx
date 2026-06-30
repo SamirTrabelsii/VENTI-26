@@ -1,3 +1,4 @@
+// src/app/fixtures/FixturesClient.tsx
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
@@ -59,6 +60,21 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
     }, [dbMatches])
 
     useEffect(() => {
+        for (const lm of liveApiMatches) {
+            const dbMatch = currentDbMatches.find(
+                m => m.home_team === lm.homeTeam?.tla && m.away_team === lm.awayTeam?.tla
+            )
+            if (!dbMatch) {
+                console.warn('[Fixtures] Live API match has no DB match', {
+                    home: lm.homeTeam?.tla,
+                    away: lm.awayTeam?.tla,
+                    status: lm.status,
+                })
+            }
+        }
+    }, [currentDbMatches, liveApiMatches])
+
+    useEffect(() => {
         const fetchLive = async () => {
             try {
                 const res = await fetch('/api/matches/live', { cache: 'no-store' })
@@ -88,26 +104,41 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
     const fullMatches = useMemo(() => {
         return ALL_MATCHES.map(m => {
             const dbMatch = currentDbMatches.find(d => d.id === m.id)
-            const effHome = dbMatch?.home_team ?? m.home_team;
-            const effAway = dbMatch?.away_team ?? m.away_team;
-            const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === effHome && l.awayTeam.tla === effAway)
+            const apiMatch = dbMatch
+                ? liveApiMatches.find(l => l.homeTeam?.tla === dbMatch.home_team && l.awayTeam?.tla === dbMatch.away_team)
+                : null
 
             let status = dbMatch?.status ?? 'upcoming'
             let hScore = dbMatch?.home_score ?? null
             let aScore = dbMatch?.away_score ?? null
 
+            // if (apiMatch) {
+            //     if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') status = 'live'
+            //     else if (apiMatch.status === 'FINISHED') status = 'finished'
+
+            //     if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
+            //         hScore = apiMatch.score.fullTime.home
+            //     }
+            //     if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
+            //         aScore = apiMatch.score.fullTime.away
+            //     }
+            // }
             if (apiMatch) {
-                if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') status = 'live'
-                else if (apiMatch.status === 'FINISHED') status = 'finished'
-                
-                if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
-                    hScore = apiMatch.score.fullTime.home
-                }
-                if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
-                    aScore = apiMatch.score.fullTime.away
+                if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') {
+                    status = 'live'
+                    // Only use live API scores during active play
+                    if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
+                        hScore = apiMatch.score.fullTime.home
+                    }
+                    if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
+                        aScore = apiMatch.score.fullTime.away
+                    }
+                } else if (apiMatch.status === 'FINISHED') {
+                    status = 'finished'
+                    // Trust DB scores for finished matches — they are already regulation-only
+                    // hScore/aScore already set from dbMatch above, don't override
                 }
             }
-
             return {
                 ...m,
                 home_team: dbMatch?.home_team ?? m.home_team,
@@ -117,6 +148,9 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 dbStatus: status,
                 actualHomeScore: hScore,
                 actualAwayScore: aScore,
+                went_to_penalties: dbMatch?.went_to_penalties ?? false,
+                penalty_home_score: dbMatch?.penalty_home_score ?? null,
+                penalty_away_score: dbMatch?.penalty_away_score ?? null,
                 isKnockoutMatch: isKnockout(m.group_label),
             }
         })
@@ -236,21 +270,17 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
         }
         let provisionalPoints: number | null = null
         if ((isLive || isFinished) && prediction && m.actualHomeScore !== null && m.actualAwayScore !== null) {
-            const effPredHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number' ? prediction.original_home_score : prediction.home_score;
-            const effPredAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number' ? prediction.original_away_score : prediction.away_score;
-            
-            const isFixtureCorrect = !ko ||
-                !prediction.predicted_home_team ||
-                !prediction.predicted_away_team ||
-                (prediction.predicted_home_team === m.home_team && prediction.predicted_away_team === m.away_team);
-
-            const res = scoreMatch(effPredHome, effPredAway, m.actualHomeScore, m.actualAwayScore, ko, {
-                predQualifier: prediction.qualifier || prediction.qualifier_pick || prediction.team_code,
-                realQualifier: m.qualifier || null,
-                isRepredicted: !!prediction.is_repredicted,
-                multiplier: m.multiplier || 1,
-                isFixtureCorrect
-            })
+            const res = scoreMatch(
+                prediction.home_score,
+                prediction.away_score,
+                m.actualHomeScore,
+                m.actualAwayScore,
+                ko,
+                {
+                    predQualifier: prediction.qualifier_pick ?? prediction.team_code ?? null,
+                    realQualifier: m.qualifier ?? null,
+                }
+            )
             provisionalPoints = res.total
         }
 
@@ -327,9 +357,9 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
 
                     {/* Score / Status Center */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 8px' }}>
-                        <div style={{ 
-                            background: isLive ? 'rgba(200,57,43,0.1)' : 'rgba(255,255,255,0.02)', 
-                            border: `1px solid ${isLive ? 'rgba(200,57,43,0.3)' : 'var(--border)'}`, 
+                        <div style={{
+                            background: isLive ? 'rgba(200,57,43,0.1)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${isLive ? 'rgba(200,57,43,0.3)' : 'var(--border)'}`,
                             borderRadius: 12, padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 14,
                             boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
                         }}>
@@ -341,6 +371,11 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                                 {(isLive || isFinished) ? m.actualAwayScore : '-'}
                             </span>
                         </div>
+                        {m.went_to_penalties && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                                Pen: {m.penalty_home_score}-{m.penalty_away_score}
+                            </span>
+                        )}
                     </div>
 
                     {/* Away Team */}
@@ -372,7 +407,7 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
 
     const scrollToLastPlayed = () => {
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Tunis' })
-        
+
         let targetIso = null
         for (const g of sortedDateGroups) {
             if (g.isoDate === todayStr) {
@@ -383,7 +418,7 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 targetIso = g.isoDate
             }
         }
-        
+
         // If tournament hasn't started, target first day. If finished, target last day.
         if (!targetIso && sortedDateGroups.length > 0) {
             targetIso = sortedDateGroups[0].isoDate
@@ -529,7 +564,7 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 }}
             >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-y-1 transition-transform duration-300">
-                    <path d="M12 5v14M19 12l-7 7-7-7"/>
+                    <path d="M12 5v14M19 12l-7 7-7-7" />
                 </svg>
                 Today
             </button>

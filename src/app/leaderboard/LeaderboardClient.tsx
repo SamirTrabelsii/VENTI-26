@@ -116,9 +116,9 @@ export default function LeaderboardClient({
                 const staticMatch = ALL_MATCHES.find(m => m.id === match.id)
                 if (!staticMatch) continue
 
-                const effHome = match.home_team ?? staticMatch.home_team;
-                const effAway = match.away_team ?? staticMatch.away_team;
-                const apiMatch = liveApiMatches.find(l => l.homeTeam.tla === effHome && l.awayTeam.tla === effAway)
+                const apiMatch = liveApiMatches.find(
+                    l => l.homeTeam?.tla === match.home_team && l.awayTeam?.tla === match.away_team
+                )
 
                 const isInPlay = apiMatch?.status === 'IN_PLAY' || apiMatch?.status === 'PAUSED'
                 const isPendingFinished = apiMatch?.status === 'FINISHED'
@@ -134,24 +134,15 @@ export default function LeaderboardClient({
                 if (pred) {
                     const ko = isKnockout(staticMatch.group_label)
                     
-                    const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
-                    const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
-                    
-                    const isFixtureCorrect = !ko ||
-                        !pred.predicted_home_team ||
-                        !pred.predicted_away_team ||
-                        (pred.predicted_home_team === effHome && pred.predicted_away_team === effAway)
-
                     const result = scoreMatch(
-                        effPredHome, effPredAway,
-                        hScore, aScore,
+                        pred.home_score,
+                        pred.away_score,
+                        hScore,
+                        aScore,
                         ko,
-                        { 
-                            predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code, 
-                            realQualifier: match.qualifier || staticMatch.qualifier || null,
-                            isRepredicted: !!pred.is_repredicted,
-                            multiplier: match.multiplier || staticMatch.multiplier || 1,
-                            isFixtureCorrect
+                        {
+                            predQualifier: pred.qualifier_pick ?? pred.team_code ?? null,
+                            realQualifier: match.qualifier ?? staticMatch.qualifier ?? null,
                         }
                     )
                     
@@ -159,7 +150,7 @@ export default function LeaderboardClient({
                     else pendingFinishedBonus += result.total
                     
                     if (result.type === 'exact') exactBonus += 1
-                    if (['exact', 'correct', 'goal_diff'].includes(result.type)) correctBonus += 1
+                    if (['exact', 'correct'].includes(result.type)) correctBonus += 1
                 }
             }
 

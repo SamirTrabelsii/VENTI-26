@@ -1,3 +1,4 @@
+// src/app/api/scoring/route.ts
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
@@ -21,7 +22,6 @@ import { roundSlotFromFixtureId } from '@/lib/live-bracket'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-    // Auth guard
     const secret = request.headers.get('x-scoring-secret')
     if (secret !== process.env.SCORING_SECRET) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -53,88 +53,66 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Match has no scores yet' }, { status: 400 })
     }
 
-    // Determine if this is a knockout match.
     const isKnockout = match.stage
         ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
         : false
 
     const realQualifier: string | null = match.qualifier ?? null
 
-    // ── 2. Load live predictions for this match ───────────────────────────────
+    // ── 2. Load predictions for this match ────────────────────────────────────
     const predictions = await fetchAllRows(
         supabase
             .from('predictions')
-            .select('user_id, home_score, away_score, qualifier_pick, original_home_score, original_away_score, is_repredicted')
+            .select('user_id, home_score, away_score, qualifier_pick')
             .eq('match_id', match_id)
     )
 
-    // ── 2b. Load bracket picks for this match if it's a knockout ──────────────
+    // ── 2b. Load live knockout picks if knockout match ─────────────────────────
     let liveKoPicks: any[] = []
-    let multiplier = 1
     if (isKnockout) {
         const { round, slotIndex } = roundSlotFromFixtureId(match.id)
-
-        // Determine multiplier
-        if (round === 'r32') multiplier = 1.5
-        else if (round === 'r16') multiplier = 2
-        else if (round === 'qf') multiplier = 3
-        else if (round === 'sf') multiplier = 4
-        else if (round === 'final') multiplier = 5
-
-        const bp = await fetchAllRows(
+        liveKoPicks = await fetchAllRows(
             supabase
                 .from('live_ko_picks')
-                .select('user_id, slot_index, team_code, home_score, away_score, predicted_home_team, predicted_away_team')
+                .select('user_id, slot_index, team_code, home_score, away_score')
                 .eq('round', round)
                 .eq('slot_index', slotIndex)
-        )
-
-        liveKoPicks = bp || []
+        ) || []
     }
 
-    // Collect all users who have a scorable prediction source.
+    // Collect all users who have a scorable prediction
     const allUserIds = new Set<string>()
     if (isKnockout) {
-        liveKoPicks?.forEach(bp => allUserIds.add(bp.user_id))
+        liveKoPicks.forEach(bp => allUserIds.add(bp.user_id))
     } else {
-        predictions?.forEach(p => allUserIds.add(p.user_id))
+        predictions.forEach(p => allUserIds.add(p.user_id))
     }
 
-    if (allUserIds.size === 0 && !isKnockout) {
+    if (allUserIds.size === 0) {
         return NextResponse.json({ message: 'No predictions for this match', processed: 0 })
     }
 
     const slot_index = isKnockout ? roundSlotFromFixtureId(match.id).slotIndex : -1
 
-    // ── 3. Score every prediction (for the response breakdown) ────────────────
+    // ── 3. Score every prediction ──────────────────────────────────────────────
     const results = Array.from(allUserIds).map(userId => {
-        const p = isKnockout ? null : predictions?.find(x => x.user_id === userId)
-
-        let predHome = p?.home_score
-        let predAway = p?.away_score
-        let predQualifier: string | null = p?.qualifier_pick ?? null
-        let isRepredicted = p?.is_repredicted ?? false
-        let isFixtureCorrect = true
+        let predHome: number | undefined
+        let predAway: number | undefined
+        let predQualifier: string | null = null
 
         if (isKnockout) {
-            const matchPick = liveKoPicks.find(bp => bp.user_id === userId && bp.slot_index === slot_index)
-            predHome = matchPick?.home_score
-            predAway = matchPick?.away_score
-            predQualifier = matchPick?.team_code ?? null
-            isRepredicted = false
-            isFixtureCorrect = true
+            const pick = liveKoPicks.find(bp => bp.user_id === userId && bp.slot_index === slot_index)
+            predHome = pick?.home_score
+            predAway = pick?.away_score
+            predQualifier = pick?.team_code ?? null
         } else {
-            // Group match
-            if (!isRepredicted && typeof p?.original_home_score === 'number' && typeof p?.original_away_score === 'number') {
-                predHome = p.original_home_score
-                predAway = p.original_away_score
-            }
+            const p = predictions.find(x => x.user_id === userId)
+            predHome = p?.home_score
+            predAway = p?.away_score
+            predQualifier = p?.qualifier_pick ?? null
         }
 
-        // If we still don't have scores, they didn't predict
-        if (typeof predHome !== 'number' || typeof predAway !== 'number') {
-            return null
-        }
+        if (typeof predHome !== 'number' || typeof predAway !== 'number') return null
 
         const result = scoreMatch(
             predHome,
@@ -142,33 +120,24 @@ export async function POST(request: Request) {
             match.home_score,
             match.away_score,
             isKnockout,
-            {
-                predQualifier,
-                realQualifier,
-                isRepredicted,
-                multiplier,
-                isFixtureCorrect
-            }
+            { predQualifier, realQualifier }
         )
+
         return {
             user_id: userId,
             points: result.total,
             breakdown: result.breakdown,
             isExact: result.type === 'exact',
-            isCorrect: ['exact', 'correct', 'goal_diff'].includes(result.type),
+            isCorrect: result.type === 'exact' || result.type === 'correct',
         }
     }).filter(r => r !== null)
-    const userIds = results.map(r => r.user_id)
 
-    // ── 5. Full recalculation for affected users ─────────────────────────────
-    // Instead of incrementally adding points (which can drift if called twice,
-    // or if a previous run partially failed), we recalculate from scratch for
-    // all users who had a prediction on this match. This guarantees every
-    // (user, group) row has the exact same correct total.
+    // ── 4. Full recalculation for affected users ───────────────────────────────
+    const userIds = results.map(r => r!.user_id)
     const { recalculateAllUsers } = await import('@/app/api/admin/recalculate/route')
     const recalcResult = await recalculateAllUsers(isKnockout ? undefined : userIds)
 
-    // ── 6. Return summary ─────────────────────────────────────────────────────
+    // ── 5. Return summary ──────────────────────────────────────────────────────
     return NextResponse.json({
         match_id,
         is_knockout: isKnockout,
@@ -181,9 +150,9 @@ export async function POST(request: Request) {
             finished_matches: recalcResult.finished_matches,
         },
         score_breakdown: results.map(r => ({
-            user_id: r.user_id,
-            points: r.points,
-            breakdown: r.breakdown,
+            user_id: r!.user_id,
+            points: r!.points,
+            breakdown: r!.breakdown,
         })),
         errors: recalcResult.errors.length > 0 ? recalcResult.errors : undefined,
     })
@@ -191,31 +160,23 @@ export async function POST(request: Request) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/scoring?match_id=xxx
-// Returns the scoring breakdown for any match — great for debugging and
-// for showing users exactly how their points were calculated.
+// Returns the scoring breakdown for any match — useful for debugging and
+// showing users exactly how their points were calculated.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
     const supabase = await createClient()
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const match_id = searchParams.get('match_id')
-    if (!match_id) {
-        return NextResponse.json({ error: 'match_id required' }, { status: 400 })
-    }
+    if (!match_id) return NextResponse.json({ error: 'match_id required' }, { status: 400 })
 
     const { data: match } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', match_id)
-        .single()
+        .from('matches').select('*').eq('id', match_id).single()
 
-    if (!match) {
-        return NextResponse.json({ error: 'Match not found' }, { status: 404 })
-    }
+    if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
 
     const predsData = await fetchAllRows(
         supabase
@@ -224,18 +185,13 @@ export async function GET(request: Request) {
             .eq('match_id', match_id)
     )
 
-    if (!predsData) {
-        return NextResponse.json({ error: 'Could not load predictions' }, { status: 500 })
-    }
-
-    const isKnockoutGet = match.stage
+    const isKnockout = match.stage
         ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
         : false
 
-    const realQualifierGet: string | null = match.qualifier ?? null
+    const realQualifier: string | null = match.qualifier ?? null
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const breakdown = predsData.map((p: any) => {
+    const breakdown = (predsData || []).map((p: any) => {
         const profile = Array.isArray(p.profile) ? p.profile[0] : p.profile
         const name = profile?.display_name ?? p.user_id
 
@@ -245,18 +201,15 @@ export async function GET(request: Request) {
                 p.away_score,
                 match.home_score,
                 match.away_score,
-                isKnockoutGet,
-                {
-                    predQualifier: p.qualifier_pick ?? null,
-                    realQualifier: realQualifierGet,
-                }
+                isKnockout,
+                { predQualifier: p.qualifier_pick ?? null, realQualifier }
             )
             return {
                 user: name,
                 predicted: `${p.home_score}–${p.away_score}`,
                 qualifier_pick: p.qualifier_pick ?? null,
                 actual: `${match.home_score}–${match.away_score}`,
-                real_qualifier: realQualifierGet,
+                real_qualifier: realQualifier,
                 total_points: result.total,
                 type: result.type,
                 breakdown: result.breakdown,
@@ -275,9 +228,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
         match_id,
         status: match.status,
-        is_knockout: isKnockoutGet,
+        is_knockout: isKnockout,
         result: match.status === 'finished' ? `${match.home_score}–${match.away_score}` : null,
-        real_qualifier: realQualifierGet,
+        real_qualifier: realQualifier,
         breakdown,
     })
 }

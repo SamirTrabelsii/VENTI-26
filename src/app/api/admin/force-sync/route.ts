@@ -1,14 +1,50 @@
+// src/app/api/admin/force-sync/route.ts
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 
-export const maxDuration = 30 // Allow more time for full db update
+export const maxDuration = 30
+
+function stageForGroupLabel(groupLabel: string): string {
+    const knockoutLabels = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL']
+    return knockoutLabels.includes(groupLabel) ? groupLabel : 'group_stage'
+}
+
+function extractScore(apiM: any) {
+    const wentToPenalties = apiM.score?.penalties?.home !== null && apiM.score?.penalties?.home !== undefined
+    const wentToExtraTime = apiM.score?.extraTime?.home !== null && apiM.score?.extraTime?.home !== undefined
+
+    let regHome: number | null = null
+    let regAway: number | null = null
+
+    if (apiM.score?.regularTime?.home !== null && apiM.score?.regularTime?.home !== undefined) {
+        regHome = apiM.score.regularTime.home
+        regAway = apiM.score.regularTime.away
+    } else if (!wentToPenalties && !wentToExtraTime) {
+        regHome = apiM.score?.fullTime?.home ?? null
+        regAway = apiM.score?.fullTime?.away ?? null
+    }
+
+    return {
+        home_score: regHome,
+        away_score: regAway,
+        penalty_home_score: wentToPenalties ? apiM.score.penalties.home : null,
+        penalty_away_score: wentToPenalties ? apiM.score.penalties.away : null,
+        went_to_penalties: wentToPenalties,
+    }
+}
+
+function mapStatus(apiStatus: string): string {
+    if (apiStatus === 'TIMED' || apiStatus === 'SCHEDULED') return 'upcoming'
+    if (apiStatus === 'IN_PLAY' || apiStatus === 'PAUSED' || apiStatus === 'HALFTIME') return 'live'
+    if (apiStatus === 'FINISHED') return 'finished'
+    return apiStatus
+}
 
 export async function POST(request: Request) {
     const authHeader = request.headers.get('authorization')
     const secretHeader = request.headers.get('x-scoring-secret')
-    
-    // Quick auth check
+
     if (secretHeader !== process.env.SCORING_SECRET) {
         if (!authHeader || !authHeader.includes('Bearer')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -16,8 +52,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = createAdminClient()
-    
-    // 1. Fetch from football-data.org
+
     let apiMatches: any[] = []
     try {
         const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
@@ -30,77 +65,136 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Failed to fetch API', details: e.message }, { status: 500 })
     }
 
-    const updates: any[] = []
-    let updatedCount = 0
+    // Pull current DB state — needed to resolve which static knockout slot
+    // (r32_1, r32_2, ...) a given real team pairing currently occupies, since
+    // team codes are the only stable identifier once fixtures are known.
+    const { data: currentDbMatches } = await supabase.from('matches').select('id, home_team, away_team, group_label')
+    const dbMatchByTeams = new Map<string, string>() // "HOME_AWAY" -> matches.id
+    for (const m of currentDbMatches || []) {
+        if (m.home_team && m.away_team) {
+            dbMatchByTeams.set(`${m.home_team}_${m.away_team}`, m.id)
+        }
+    }
 
-    // 2. Map Group Matches
+    const updates: any[] = []
+    const unmatched: string[] = []
+
+    // ── GROUP STAGE: match by group + home/away team code (always unique) ─────
     const groups = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
-    
     for (const g of groups) {
         const apiGroup = apiMatches.filter(m => m.stage === 'GROUP_STAGE' && m.group === `GROUP_${g}`)
-        // Sort chronologically
-        apiGroup.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-        
         const localGroup = GROUP_MATCHES.filter(m => m.group_label === g)
-        localGroup.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
 
-        for (let i = 0; i < Math.min(apiGroup.length, localGroup.length); i++) {
-            const apiM = apiGroup[i]
-            const localM = localGroup[i]
+        for (const apiM of apiGroup) {
+            const homeCode = apiM.homeTeam?.tla
+            const awayCode = apiM.awayTeam?.tla
+            if (!homeCode || !awayCode) continue
 
-            let status = apiM.status
-            if (apiM.status === 'TIMED' || apiM.status === 'SCHEDULED') status = 'upcoming'
-            else if (apiM.status === 'IN_PLAY' || apiM.status === 'PAUSED' || apiM.status === 'HALFTIME') status = 'live'
-            else if (apiM.status === 'FINISHED') status = 'finished'
+            // Find the local static match for this exact team pairing
+            const localM = localGroup.find(lm => lm.home_team === homeCode && lm.away_team === awayCode)
+                ?? localGroup.find(lm => {
+                    // Fallback: match might be stored reversed in static data — unlikely for groups but safe
+                    return lm.home_team === awayCode && lm.away_team === homeCode
+                })
+
+            if (!localM) {
+                unmatched.push(`group_${g}:${homeCode}_vs_${awayCode}`)
+                continue
+            }
 
             const { api_id, ...restLocalM } = localM
+            const scoreData = extractScore(apiM)
+            const status = mapStatus(apiM.status)
+
             updates.push({
                 ...restLocalM,
                 id: localM.id,
-                home_team: apiM.homeTeam?.tla || localM.home_team,
-                away_team: apiM.awayTeam?.tla || localM.away_team,
-                home_score: apiM.score?.fullTime?.home ?? null,
-                away_score: apiM.score?.fullTime?.away ?? null,
-                status: status,
+                home_team: homeCode,
+                away_team: awayCode,
+                ...scoreData,
+                status,
                 kickoff: apiM.utcDate,
+                stage: stageForGroupLabel(localM.group_label),
             })
         }
     }
 
-    // 3. Map Knockout Matches (just chronological for now)
+    // ── KNOCKOUT: match by team codes against current DB state first; if the
+    // pairing is new (both teams just became known), fall back to finding the
+    // static slot whose CURRENT db row has matching placeholder/TBD teams at
+    // the same kickoff time + round. ──────────────────────────────────────────
     const apiKnockouts = apiMatches.filter(m => m.stage !== 'GROUP_STAGE')
-    apiKnockouts.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-    
     const localKnockouts = [...KNOCKOUT_MATCHES]
-    localKnockouts.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+    const dbMatchById = new Map((currentDbMatches || []).map(m => [m.id, m]))
 
-    for (let i = 0; i < Math.min(apiKnockouts.length, localKnockouts.length); i++) {
-        const apiM = apiKnockouts[i]
-        const localM = localKnockouts[i]
+    for (const apiM of apiKnockouts) {
+        const homeCode = apiM.homeTeam?.tla
+        const awayCode = apiM.awayTeam?.tla
+        if (!homeCode || !awayCode) continue // teams not yet known — skip until resolved
 
-        let status = apiM.status
-        if (apiM.status === 'TIMED' || apiM.status === 'SCHEDULED') status = 'upcoming'
-        else if (apiM.status === 'IN_PLAY' || apiM.status === 'PAUSED' || apiM.status === 'HALFTIME') status = 'live'
-        else if (apiM.status === 'FINISHED') status = 'finished'
+        // 1. Try exact match against current DB team pairing (handles re-sync
+        //    of already-resolved fixtures, finished or upcoming).
+        let localM = localKnockouts.find(lm => {
+            const dbRow = dbMatchById.get(lm.id)
+            return dbRow && dbRow.home_team === homeCode && dbRow.away_team === awayCode
+        })
+
+        // 2. First time this pairing appears: find a knockout slot of the same
+        //    round whose DB row still has unresolved/placeholder teams, and
+        //    whose static kickoff time matches the API kickoff time (rounds
+        //    keep static kickoff slots stable even before teams are known).
+        if (!localM) {
+            const apiKickoff = new Date(apiM.utcDate).getTime()
+            localM = localKnockouts.find(lm => {
+                if (Math.abs(new Date(lm.kickoff).getTime() - apiKickoff) > 60_000) return false
+                const dbRow = dbMatchById.get(lm.id)
+                // Only claim slots not already resolved to a DIFFERENT pairing
+                if (dbRow && dbRow.home_team && dbRow.away_team) {
+                    const alreadyThisPairing = dbRow.home_team === homeCode && dbRow.away_team === awayCode
+                    const looksResolved = !dbRow.home_team.includes(' ') && dbRow.home_team.length <= 4
+                    if (looksResolved && !alreadyThisPairing) return false
+                }
+                return true
+            })
+        }
+
+        if (!localM) {
+            unmatched.push(`knockout:${homeCode}_vs_${awayCode}_at_${apiM.utcDate}`)
+            continue
+        }
 
         const { api_id, ...restLocalM } = localM
+        const scoreData = extractScore(apiM)
+        const status = mapStatus(apiM.status)
+
+        let qualifier: string | null = null
+        if (status === 'finished') {
+            if (scoreData.went_to_penalties) {
+                qualifier = scoreData.penalty_home_score! > scoreData.penalty_away_score! ? homeCode : awayCode
+            } else if (typeof scoreData.home_score === 'number' && typeof scoreData.away_score === 'number') {
+                if (scoreData.home_score > scoreData.away_score) qualifier = homeCode
+                else if (scoreData.away_score > scoreData.home_score) qualifier = awayCode
+            }
+        }
+
         updates.push({
             ...restLocalM,
             id: localM.id,
-            home_team: apiM.homeTeam?.tla || localM.home_team,
-            away_team: apiM.awayTeam?.tla || localM.away_team,
-            home_score: apiM.score?.fullTime?.home ?? null,
-            away_score: apiM.score?.fullTime?.away ?? null,
-            status: status,
+            home_team: homeCode,
+            away_team: awayCode,
+            ...scoreData,
+            status,
             kickoff: apiM.utcDate,
+            stage: stageForGroupLabel(localM.group_label),
+            qualifier,
         })
     }
 
-    // 4. Update the Database!
+    // ── Update the Database ──────────────────────────────────────────────────
     const batchSize = 20
+    let updatedCount = 0
     for (let i = 0; i < updates.length; i += batchSize) {
         const batch = updates.slice(i, i + batchSize)
-        // Upsert by id
         const { error } = await supabase.from('matches').upsert(batch, { onConflict: 'id' })
         if (error) {
             console.error('Batch error:', error)
@@ -109,12 +203,16 @@ export async function POST(request: Request) {
         updatedCount += batch.length
     }
 
-    // 5. Trigger Recalculate
     const baseUrl = new URL(request.url).origin
-    await fetch(`${baseUrl}/api/admin/recalculate`, { 
-        method: 'POST', 
-        headers: { 'x-scoring-secret': process.env.SCORING_SECRET ?? '' } 
-    }).catch(() => {})
+    await fetch(`${baseUrl}/api/admin/recalculate`, {
+        method: 'POST',
+        headers: { 'x-scoring-secret': process.env.SCORING_SECRET ?? '' },
+    }).catch(() => { })
 
-    return NextResponse.json({ success: true, updatedCount, updates })
+    return NextResponse.json({
+        success: true,
+        updatedCount,
+        unmatched,
+        updates,
+    })
 }

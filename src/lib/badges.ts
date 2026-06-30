@@ -97,8 +97,6 @@ export function evaluateBadges(ctx: EvalContext): Set<string> {
             {
                 predQualifier: pred.qualifier_pick || pred.qualifier || null,
                 realQualifier: match.qualifier || null,
-                isRepredicted: !!pred.is_repredicted,
-                multiplier: match.multiplier || 1,
             }
         )
 

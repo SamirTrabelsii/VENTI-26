@@ -71,10 +71,11 @@ export async function GET(
                 const liveData = await liveRes.json()
                 const liveMatches: any[] = liveData.matches || []
 
-                // Match by home + away team codes
+                // Match by DB home + away team codes. Knockout static fixtures use
+                // placeholders, but the DB row has real teams once the bracket is set.
                 const liveMatch = liveMatches.find(m =>
-                    (m._homeCode === localMatch.home_team && m._awayCode === localMatch.away_team) ||
-                    (NAME_TO_CODE[m.homeTeam?.name] === localMatch.home_team && NAME_TO_CODE[m.awayTeam?.name] === localMatch.away_team)
+                    (m._homeCode === dbMatch?.home_team && m._awayCode === dbMatch?.away_team) ||
+                    (NAME_TO_CODE[m.homeTeam?.name] === dbMatch?.home_team && NAME_TO_CODE[m.awayTeam?.name] === dbMatch?.away_team)
                 )
 
                 if (liveMatch && liveMatch.status !== 'SCHEDULED') {
@@ -131,7 +132,6 @@ export async function GET(
 
         const leaderboard = (bracketPicks ?? []).map(p => {
             const profile = profileMap.get(p.user_id)
-            const isFixtureCorrect = true
             const scoreResult = hasScore
                 ? scoreMatch(
                     p.home_score ?? -1,
@@ -142,8 +142,6 @@ export async function GET(
                     {
                         predQualifier: p.team_code,
                         realQualifier: dbMatch?.qualifier ?? null,
-                        isRepredicted: false,
-                        isFixtureCorrect,
                     }
                 )
                 : null

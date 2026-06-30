@@ -1,3 +1,4 @@
+// src/app/api/groups/[id]/scores/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/pagination'
@@ -8,7 +9,79 @@ import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 export const dynamic = 'force-dynamic'
 
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
-const isKnockout = (groupLabel: string) => ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
+const isKnockout = (groupLabel: string) =>
+    ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
+
+const TEAM_NAME_TO_CODE: Record<string, string> = {
+    'Mexico': 'MEX', 'South Africa': 'RSA', 'Korea Republic': 'KOR', 'South Korea': 'KOR',
+    'Czechia': 'CZE', 'Czech Republic': 'CZE', 'Canada': 'CAN', 'Bosnia-Herzegovina': 'BIH',
+    'Bosnia and Herzegovina': 'BIH', 'United States': 'USA', 'Paraguay': 'PAR', 'Qatar': 'QAT',
+    'Switzerland': 'SUI', 'Brazil': 'BRA', 'Morocco': 'MAR', 'Haiti': 'HAI', 'Scotland': 'SCO',
+    'Australia': 'AUS', 'Turkey': 'TUR', 'Germany': 'GER', 'Curacao': 'CUW', 'Netherlands': 'NED',
+    'Japan': 'JPN', 'Ivory Coast': 'CIV', 'Ecuador': 'ECU', 'Sweden': 'SWE', 'Tunisia': 'TUN',
+    'Spain': 'ESP', 'Cape Verde Islands': 'CPV', 'Cape Verde': 'CPV', 'Belgium': 'BEL',
+    'Egypt': 'EGY', 'Saudi Arabia': 'KSA', 'Uruguay': 'URU', 'Iran': 'IRN', 'New Zealand': 'NZL',
+    'France': 'FRA', 'Senegal': 'SEN', 'Iraq': 'IRQ', 'Norway': 'NOR', 'Argentina': 'ARG',
+    'Algeria': 'ALG', 'Austria': 'AUT', 'Jordan': 'JOR', 'Portugal': 'POR', 'DR Congo': 'COD',
+    'Democratic Republic of the Congo': 'COD', 'Uzbekistan': 'UZB', 'Colombia': 'COL',
+    'England': 'ENG', 'Croatia': 'CRO', 'Ghana': 'GHA', 'Panama': 'PAN',
+}
+
+function isGroupStageLabel(groupLabel?: string | null) {
+    return !groupLabel || !['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
+}
+
+// Mirror of the same pattern used in leaderboard/page.tsx
+async function fetchApiFinishedMatches(dbMatches: any[]): Promise<any[]> {
+    try {
+        const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+            headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY ?? '' },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(4500),
+        })
+        if (!res.ok) return []
+
+        const data = await res.json()
+        const finished: any[] = []
+
+        for (const apiMatch of data.matches ?? []) {
+            if (apiMatch.status !== 'FINISHED') continue
+
+            const homeCode = TEAM_NAME_TO_CODE[apiMatch.homeTeam?.name] || apiMatch.homeTeam?.tla
+            const awayCode = TEAM_NAME_TO_CODE[apiMatch.awayTeam?.name] || apiMatch.awayTeam?.tla
+            const homeScore = apiMatch.score?.fullTime?.home
+            const awayScore = apiMatch.score?.fullTime?.away
+
+            if (!homeCode || !awayCode || typeof homeScore !== 'number' || typeof awayScore !== 'number') continue
+
+            const dbMatch = dbMatches.find((m: any) => m.home_team === homeCode && m.away_team === awayCode)
+            if (!dbMatch) {
+                console.warn('[GroupScores] Finished API match has no DB match', {
+                    home: homeCode,
+                    away: awayCode,
+                    status: apiMatch.status,
+                })
+                continue
+            }
+
+            const staticMatch = ALL_MATCHES.find(m => m.id === dbMatch.id)
+            if (!staticMatch) continue
+
+            finished.push({
+                ...staticMatch,
+                stage: dbMatch?.stage ?? (isGroupStageLabel(staticMatch.group_label) ? 'group' : staticMatch.group_label),
+                qualifier: dbMatch?.qualifier ?? null,
+                home_score: homeScore,
+                away_score: awayScore,
+                status: 'finished',
+            })
+        }
+
+        return finished
+    } catch {
+        return []
+    }
+}
 
 export async function GET(
     request: Request,
@@ -44,43 +117,41 @@ export async function GET(
         return NextResponse.json({ scores: [], member_count: 0, members_preview: [] })
     }
 
-    const [predictions, bracketPicks, scoreRows, finishedMatchesData, liveMatchesData] = await Promise.all([
+    const [predictions, bracketPicks, matchesData, liveMatchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*').in('user_id', memberIds)),
         fetchAllRows(supabase.from('live_ko_picks').select('*').in('user_id', memberIds)),
-        fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points').in('user_id', memberIds)),
-        fetchAllRows(supabase.from('matches').select('*').eq('status', 'finished')),
-        fetchAllRows(
-            supabase
-                .from('matches')
-                .select('*')
-                .eq('status', 'live')
-        ),
+        fetchAllRows(supabase.from('matches').select('*')),
+        fetchAllRows(supabase.from('matches').select('*').eq('status', 'live')),
     ])
 
-    const bracketBonusByUser = new Map<string, number>()
-    for (const row of scoreRows) {
-        const current = bracketBonusByUser.get(row.user_id) ?? 0
-        bracketBonusByUser.set(row.user_id, Math.max(current, row.bracket_bonus_points ?? 0))
-    }
-
-    const finishedMatches = finishedMatchesData
-        .filter((m: any) => m.home_score !== null && m.away_score !== null)
-        .sort((a: any, b: any) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
-
-    const totals = computeFreshScores(
-        memberIds,
-        finishedMatches,
-        predictions,
-        bracketPicks,
-        bracketBonusByUser,
+    // ── Build effective finished matches (DB + API, same as leaderboard) ──────
+    const dbFinishedMatches = matchesData.filter(
+        (m: any) => m.status === 'finished' && m.home_score !== null && m.away_score !== null
     )
 
+    const apiFinishedMatches = await fetchApiFinishedMatches(matchesData)
+    const apiFinishedIds = new Set(apiFinishedMatches.map((m: any) => m.id))
+
+    const effectiveFinishedMatches = [
+        ...apiFinishedMatches,
+        ...dbFinishedMatches.filter((m: any) => !apiFinishedIds.has(m.id)),
+    ].sort((a: any, b: any) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+
+    // ── Compute base scores from all finished matches ─────────────────────────
+    const totals = computeFreshScores(
+        memberIds,
+        effectiveFinishedMatches,
+        predictions,
+        bracketPicks,
+    )
+
+    // ── Live bonus (IN_PLAY / PAUSED matches from external API) ───────────────
     let liveApiMatches: any[] = []
     try {
-        const liveRes = await fetch(new URL('/api/matches/live', request.url).toString(), {
-            cache: 'no-store',
-            signal: AbortSignal.timeout(4000),
-        })
+        const liveRes = await fetch(
+            new URL('/api/matches/live', request.url).toString(),
+            { cache: 'no-store', signal: AbortSignal.timeout(4000) }
+        )
         if (liveRes.ok) {
             const liveData = await liveRes.json()
             liveApiMatches = liveData.matches ?? []
@@ -90,6 +161,9 @@ export async function GET(
     }
 
     const liveMatchIds = new Set(liveMatchesData.map((m: any) => m.id))
+    const effectiveFinishedIds = new Set(effectiveFinishedMatches.map((m: any) => m.id))
+
+    // Predictions for live matches only
     const livePredictions = liveMatchesData.length > 0
         ? [
             ...predictions.filter((p: any) => liveMatchIds.has(p.match_id)),
@@ -100,54 +174,51 @@ export async function GET(
         : []
 
     const liveTotalsByUser = new Map<string, { points: number; exact: number; correct: number }>()
+
     for (const match of liveMatchesData) {
         const staticMatch = ALL_MATCHES.find(m => m.id === match.id)
         if (!staticMatch) continue
 
+        // Skip if already counted in effectiveFinishedMatches
+        if (effectiveFinishedIds.has(match.id)) continue
+
         const effHome = match.home_team ?? staticMatch.home_team
         const effAway = match.away_team ?? staticMatch.away_team
-        const apiMatch = liveApiMatches.find(l => l.homeTeam?.tla === effHome && l.awayTeam?.tla === effAway)
+        const apiMatch = liveApiMatches.find(
+            l => l.homeTeam?.tla === effHome && l.awayTeam?.tla === effAway
+        )
 
         if (apiMatch?.status !== 'IN_PLAY' && apiMatch?.status !== 'PAUSED') continue
 
         const hScore = apiMatch.score?.fullTime?.home
         const aScore = apiMatch.score?.fullTime?.away
-
         if (typeof hScore !== 'number' || typeof aScore !== 'number') continue
 
         for (const pred of livePredictions.filter((p: any) => p.match_id === match.id)) {
             const ko = isKnockout(staticMatch.group_label)
-            const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number'
-                ? pred.original_home_score
-                : pred.home_score
-            const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number'
-                ? pred.original_away_score
-                : pred.away_score
+            if (typeof pred.home_score !== 'number' || typeof pred.away_score !== 'number') continue
 
-            if (typeof effPredHome !== 'number' || typeof effPredAway !== 'number') continue
-
-            const isFixtureCorrect = ko
-                ? true
-                : !pred.predicted_home_team ||
-                    !pred.predicted_away_team ||
-                    (pred.predicted_home_team === effHome && pred.predicted_away_team === effAway)
-
-            const result = scoreMatch(effPredHome, effPredAway, hScore, aScore, ko, {
-                predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
-                realQualifier: match.qualifier || staticMatch.qualifier || null,
-                isRepredicted: !!pred.is_repredicted,
-                multiplier: match.multiplier || staticMatch.multiplier || 1,
-                isFixtureCorrect,
-            })
+            const result = scoreMatch(
+                pred.home_score,
+                pred.away_score,
+                hScore,
+                aScore,
+                ko,
+                {
+                    predQualifier: pred.qualifier_pick ?? pred.team_code ?? null,
+                    realQualifier: match.qualifier ?? staticMatch.qualifier ?? null,
+                }
+            )
 
             const current = liveTotalsByUser.get(pred.user_id) ?? { points: 0, exact: 0, correct: 0 }
             current.points += result.total
             if (result.type === 'exact') current.exact += 1
-            if (['exact', 'correct', 'goal_diff'].includes(result.type)) current.correct += 1
+            if (result.type === 'exact' || result.type === 'correct') current.correct += 1
             liveTotalsByUser.set(pred.user_id, current)
         }
     }
 
+    // ── Build final scores array ───────────────────────────────────────────────
     const scores = members.map((m: any) => {
         const profile = Array.isArray(m.profile) ? m.profile[0] : m.profile
         const total = totals.get(m.user_id)
@@ -175,14 +246,12 @@ export async function GET(
         }
     }).sort((a, b) =>
         b.total_points - a.total_points ||
+        b.exact_scores - a.exact_scores ||
         a.display_name.localeCompare(b.display_name)
     )
 
-    return NextResponse.json({
-        scores,
-        member_count: members.length,
-        members_preview: scores.slice(0, 5).map(s => ({ display_name: s.display_name })),
-    }, {
-        headers: { 'Cache-Control': 'no-store, max-age=0' },
-    })
+    return NextResponse.json(
+        { scores, member_count: members.length, members_preview: scores.slice(0, 5).map(s => ({ display_name: s.display_name })) },
+        { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+    )
 }

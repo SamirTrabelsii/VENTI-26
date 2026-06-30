@@ -102,7 +102,7 @@ export async function POST(request: Request) {
                 user_id: p.user_id,
                 points: result.total,
                 isExact: result.type === 'exact',
-                isCorrect: ['exact', 'correct', 'goal_diff'].includes(result.type),
+                isCorrect: ['exact', 'correct'].includes(result.type),
             }
         })
 

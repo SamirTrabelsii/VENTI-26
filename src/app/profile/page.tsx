@@ -1,3 +1,4 @@
+// src/app/profile/page.tsx
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
@@ -37,6 +38,28 @@ const DNA_PROFILES = [
     { id: 'pragmatist', icon: '🧱', label: 'The Pragmatist', color: '#5b9fff', description: 'Draws, tight margins, defensive outcomes. You respect the grind. You know that 1-0 is the most honest scoreline in football.' },
 ]
 
+// Colour helpers for match history rows — no goal_diff
+function predBg(type: string) {
+    if (type === 'exact') return 'rgba(212,168,67,0.1)'
+    if (type === 'correct') return 'rgba(91,159,255,0.1)'
+    return 'var(--surface3)'
+}
+function predColor(type: string) {
+    if (type === 'exact') return 'var(--gold)'
+    if (type === 'correct') return '#5b9fff'
+    return 'var(--muted)'
+}
+function predBorder(type: string) {
+    if (type === 'exact') return 'var(--gold)'
+    if (type === 'correct') return '#5b9fff'
+    return 'var(--border)'
+}
+function mobilePredColor(type: string) {
+    if (type === 'exact') return 'var(--gold)'
+    if (type === 'correct') return '#10b981'
+    return 'var(--cream)'
+}
+
 function ProfileContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -45,7 +68,6 @@ function ProfileContent() {
     const [profile, setProfile] = useState<any>(null)
     const [predCount, setPredCount] = useState(0)
     const [totalPoints, setTotalPoints] = useState(0)
-    const [qualifiersBonus, setQualifiersBonus] = useState(0)
     const [exactCount, setExactCount] = useState(0)
     const [currentStreak, setCurrentStreak] = useState(0)
     const [bestStreak, setBestStreak] = useState(0)
@@ -53,64 +75,50 @@ function ProfileContent() {
     const [activeFilter, setActiveFilter] = useState<'all' | Tier>('all')
     const [loading, setLoading] = useState(true)
 
-    // New states for Match History & Graph
     const [historyMatches, setHistoryMatches] = useState<any[]>([])
     const [pointsProgression, setPointsProgression] = useState<number[]>([])
     const [visibleHistoryCount, setVisibleHistoryCount] = useState(10)
-    
-    // DB Badges & Progress
+
     const [earnedBadges, setEarnedBadges] = useState<Set<string>>(new Set())
     const [badgeProgress, setBadgeProgress] = useState<Record<string, { current: number; target: number }>>({})
 
     useEffect(() => {
         const init = async () => {
             let targetUserId = searchParams.get('id')
-            let isCurrentUser = false
 
             if (!targetUserId) {
                 const { data: { user } } = await supabase.auth.getUser()
                 if (!user) { router.push('/auth/login'); return }
                 targetUserId = user.id
-                isCurrentUser = true
             }
 
             const { data: p } = await supabase.from('profiles').select('*').eq('id', targetUserId).single()
             setProfile(p)
 
-            // Fetch User Predictions
             const { data: predictions } = await supabase.from('predictions').select('*').eq('user_id', targetUserId)
-            
-            // Fetch live knockout picks
             const { data: liveKoPicks } = await supabase.from('live_ko_picks').select('*').eq('user_id', targetUserId)
-            
-            // Fetch Bracket Bonus Points
-            const { data: scoreRow } = await supabase.from('scores').select('bracket_bonus_points').eq('user_id', targetUserId).limit(1).single()
-            const bracketBonus = scoreRow?.bracket_bonus_points || 0
-            setQualifiersBonus(bracketBonus)
 
-            
-            const groupPreds = predictions?.length ?? 0
-            const bracketPreds = liveKoPicks?.length ?? 0
-            setPredCount(groupPreds + bracketPreds)
+            setPredCount((predictions?.length ?? 0) + (liveKoPicks?.length ?? 0))
 
-            // Normalize live knockout picks to look like standard predictions
             const normalizedLiveKoPicks = (liveKoPicks || []).map(bp => ({
                 ...bp,
                 match_id: matchIdForLiveKoPick(bp),
                 qualifier_pick: bp.team_code,
-                is_repredicted: false
             }))
 
             const allPredictions = [...(predictions || []), ...normalizedLiveKoPicks]
 
-            // Fetch earned badges from DB
             const { data: dbBadges } = await supabase.from('user_badges').select('badge_id').eq('user_id', targetUserId)
             setEarnedBadges(new Set((dbBadges || []).map(b => b.badge_id)))
 
-            // Fetch DB Matches
-            const { data: dbMatches } = await supabase.from('matches').select('*').eq('status', 'finished')
+            // Fetch ALL DB matches (not just finished) so we have real team names & qualifiers
+            const { data: allDbMatches } = await supabase.from('matches').select('*')
+            const dbMatches = (allDbMatches || []).filter((m: any) => m.status === 'finished')
 
-            // Fetch live API matches
+            // Build a lookup by match id for quick access
+            const dbMatchById = new Map<string, any>()
+            for (const m of allDbMatches || []) dbMatchById.set(m.id, m)
+
             let liveMatches: any[] = []
             try {
                 const res = await fetch('/api/matches/live')
@@ -118,134 +126,165 @@ function ProfileContent() {
                     const data = await res.json()
                     liveMatches = data.matches || []
                 }
-            } catch (e) { }
+            } catch { }
 
-            const activeLiveMatches = liveMatches.filter(m => m.status === 'FINISHED' || m.status === 'IN_PLAY' || m.status === 'PAUSED')
+            const activeLiveMatches = liveMatches.filter(
+                m => m.status === 'FINISHED' || m.status === 'IN_PLAY' || m.status === 'PAUSED'
+            )
 
-            // Calculate History & Progression
-            let hist: any[] = []
+            const hist: any[] = []
             const processedMatchIds = new Set<string>()
 
-            if (predictions) {
-                // 1. Process live matches first (they are more up-to-date)
-                for (const lm of activeLiveMatches) {
-                    const staticMatch = ALL_MATCHES.find(m => m.home_team === lm.homeTeam.tla && m.away_team === lm.awayTeam.tla)
-                    if (!staticMatch) continue
-                    
-                    const pred = allPredictions.find(p => p.match_id === staticMatch.id)
-                    if (lm.score.fullTime.home !== null && lm.score.fullTime.away !== null) {
-                        if (pred && typeof pred.home_score === 'number') {
-                            const isKnockout = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(staticMatch.group_label)
-                            
-                            const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
-                            const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
-                            
-                            const isFixtureCorrect = isKnockout
-                                ? true
-                                : !pred.predicted_home_team ||
-                                    !pred.predicted_away_team ||
-                                    (pred.predicted_home_team === lm.homeTeam.tla && pred.predicted_away_team === lm.awayTeam.tla);
-
-                            const res = scoreMatch(effPredHome, effPredAway, lm.score.fullTime.home, lm.score.fullTime.away, isKnockout, {
-                                predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
-                                isRepredicted: pred.is_repredicted,
-                                isFixtureCorrect,
-                                multiplier: 1 // Live matches via API don't have DB multipliers easily accessible here unless fetched
-                            })
-                            hist.push({
-                                ...staticMatch,
-                                real_home_score: lm.score.fullTime.home,
-                                real_away_score: lm.score.fullTime.away,
-                                pred_home_score: effPredHome,
-                                pred_away_score: effPredAway,
-                                points: res.total,
-                                type: res.type,
-                                status: lm.status
-                            })
-                        } else {
-                            hist.push({
-                                ...staticMatch,
-                                real_home_score: lm.score.fullTime.home,
-                                real_away_score: lm.score.fullTime.away,
-                                pred_home_score: null,
-                                pred_away_score: null,
-                                points: 0,
-                                type: 'none',
-                                status: lm.status
-                            })
-                        }
-                        processedMatchIds.add(staticMatch.id)
-                    }
+            // 1. Process live API matches first (most up-to-date scores)
+            for (const lm of activeLiveMatches) {
+                const dbMatch = (allDbMatches || []).find(
+                    (m: any) => m.home_team === lm.homeTeam?.tla && m.away_team === lm.awayTeam?.tla
+                )
+                if (!dbMatch) {
+                    console.warn('[Profile] Live API match has no DB match', {
+                        home: lm.homeTeam?.tla,
+                        away: lm.awayTeam?.tla,
+                        status: lm.status,
+                    })
+                    continue
                 }
 
-                // 2. Process DB matches
-                if (dbMatches) {
-                    for (const dbm of dbMatches) {
-                        if (processedMatchIds.has(dbm.id)) continue
-                        const staticMatch = ALL_MATCHES.find(m => m.id === dbm.id)
-                        const pred = allPredictions.find(p => p.match_id === dbm.id)
-                        if (typeof dbm.home_score === 'number') {
-                            if (pred && typeof pred.home_score === 'number') {
-                                const isKnockout = dbm.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(dbm.stage) : false
-                                const effPredHome = !pred.is_repredicted && typeof pred.original_home_score === 'number' ? pred.original_home_score : pred.home_score;
-                                const effPredAway = !pred.is_repredicted && typeof pred.original_away_score === 'number' ? pred.original_away_score : pred.away_score;
-                                
-                                const isFixtureCorrect = isKnockout
-                                    ? true
-                                    : !pred.predicted_home_team ||
-                                        !pred.predicted_away_team ||
-                                        (pred.predicted_home_team === dbm.home_team && pred.predicted_away_team === dbm.away_team);
+                const staticMatch = ALL_MATCHES.find(m => m.id === dbMatch.id)
+                if (!staticMatch) continue
+                if (lm.score.fullTime.home === null || lm.score.fullTime.away === null) continue
 
-                                const res = scoreMatch(effPredHome, effPredAway, dbm.home_score, dbm.away_score, isKnockout, {
-                                    predQualifier: pred.qualifier_pick || pred.qualifier || pred.team_code,
-                                    realQualifier: dbm.qualifier,
-                                    isRepredicted: !!pred.is_repredicted,
-                                    multiplier: dbm.multiplier ?? 1,
-                                    isFixtureCorrect
-                                })
-                                hist.push({
-                                    ...staticMatch,
-                                    real_home_score: dbm.home_score,
-                                    real_away_score: dbm.away_score,
-                                    pred_home_score: effPredHome,
-                                    pred_away_score: effPredAway,
-                                    points: res.total,
-                                    type: res.type,
-                                    status: dbm.status
-                                })
-                            } else {
-                                hist.push({
-                                    ...staticMatch,
-                                    real_home_score: dbm.home_score,
-                                    real_away_score: dbm.away_score,
-                                    pred_home_score: null,
-                                    pred_away_score: null,
-                                    points: 0,
-                                    type: 'none',
-                                    status: dbm.status
-                                })
-                            }
+                // Use DB match for real team names and qualifier
+                const realHomeTeam = dbMatch.home_team
+                const realAwayTeam = dbMatch.away_team
+                const realQualifier = dbMatch?.qualifier ?? null
+
+                const pred = allPredictions.find(p => p.match_id === dbMatch.id)
+
+                if (pred && typeof pred.home_score === 'number') {
+                    const isKnockout = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(staticMatch.group_label)
+                    const res = scoreMatch(
+                        pred.home_score,
+                        pred.away_score,
+                        lm.score.fullTime.home,
+                        lm.score.fullTime.away,
+                        isKnockout,
+                        {
+                            predQualifier: pred.qualifier_pick ?? pred.team_code ?? null,
+                            realQualifier,
                         }
-                    }
+                    )
+                    hist.push({
+                        ...staticMatch,
+                        home_team: realHomeTeam,
+                        away_team: realAwayTeam,
+                        real_home_score: lm.score.fullTime.home,
+                        real_away_score: lm.score.fullTime.away,
+                        went_to_penalties: dbMatch.went_to_penalties ?? false,
+                        penalty_home_score: dbMatch.penalty_home_score ?? null,
+                        penalty_away_score: dbMatch.penalty_away_score ?? null,
+                        pred_home_score: pred.home_score,
+                        pred_away_score: pred.away_score,
+                        points: res.total,
+                        type: res.type,
+                        status: lm.status,
+                    })
+                } else {
+                    hist.push({
+                        ...staticMatch,
+                        home_team: realHomeTeam,
+                        away_team: realAwayTeam,
+                        real_home_score: lm.score.fullTime.home,
+                        real_away_score: lm.score.fullTime.away,
+                        went_to_penalties: dbMatch.went_to_penalties ?? false,
+                        penalty_home_score: dbMatch.penalty_home_score ?? null,
+                        penalty_away_score: dbMatch.penalty_away_score ?? null,
+                        pred_home_score: null,
+                        pred_away_score: null,
+                        points: 0,
+                        type: 'none',
+                        status: lm.status,
+                    })
+                }
+                processedMatchIds.add(dbMatch.id)
+            }
+
+            // 2. Process DB finished matches
+            for (const dbm of dbMatches) {
+                if (processedMatchIds.has(dbm.id)) continue
+
+                const staticMatch = ALL_MATCHES.find(m => m.id === dbm.id)
+                const pred = allPredictions.find(p => p.match_id === dbm.id)
+
+                if (typeof dbm.home_score !== 'number') continue
+
+                // Always use DB team names — they have the real teams, not placeholders
+                const realHomeTeam = dbm.home_team ?? staticMatch?.home_team
+                const realAwayTeam = dbm.away_team ?? staticMatch?.away_team
+
+                if (pred && typeof pred.home_score === 'number') {
+                    const isKnockout = dbm.stage
+                        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(dbm.stage)
+                        : false
+                    const res = scoreMatch(
+                        pred.home_score,
+                        pred.away_score,
+                        dbm.home_score,
+                        dbm.away_score,
+                        isKnockout,
+                        {
+                            predQualifier: pred.qualifier_pick ?? pred.team_code ?? null,
+                            realQualifier: dbm.qualifier ?? null,
+                        }
+                    )
+                    hist.push({
+                        ...staticMatch,
+                        home_team: realHomeTeam,
+                        away_team: realAwayTeam,
+                        real_home_score: dbm.home_score,
+                        real_away_score: dbm.away_score,
+                        went_to_penalties: dbm.went_to_penalties ?? false,
+                        penalty_home_score: dbm.penalty_home_score ?? null,
+                        penalty_away_score: dbm.penalty_away_score ?? null,
+                        pred_home_score: pred.home_score,
+                        pred_away_score: pred.away_score,
+                        points: res.total,
+                        type: res.type,
+                        status: dbm.status,
+                    })
+                } else {
+                    hist.push({
+                        ...staticMatch,
+                        home_team: realHomeTeam,
+                        away_team: realAwayTeam,
+                        real_home_score: dbm.home_score,
+                        real_away_score: dbm.away_score,
+                        went_to_penalties: dbm.went_to_penalties ?? false,
+                        penalty_home_score: dbm.penalty_home_score ?? null,
+                        penalty_away_score: dbm.penalty_away_score ?? null,
+                        pred_home_score: null,
+                        pred_away_score: null,
+                        points: 0,
+                        type: 'none',
+                        status: dbm.status,
+                    })
                 }
             }
 
-            // Sort by kickoff date
             hist.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
             setHistoryMatches(hist)
 
-            // Derive KPIs dynamically from match history (single source of truth)
-            let dynTotal = bracketBonus
+            // KPIs — single pass over history
+            let dynTotal = 0
             let dynExact = 0
             let dynCurrentStreak = 0
             let dynBestStreak = 0
+
             for (const m of hist) {
                 dynTotal += m.points
                 if (m.type === 'exact') dynExact++
-                
-                // Only evaluate streaks for fully finished matches
+
                 if (m.status === 'FINISHED' || m.status === 'finished') {
-                    if (['exact', 'correct', 'goal_diff'].includes(m.type)) {
+                    if (m.type === 'exact' || m.type === 'correct') {
                         dynCurrentStreak++
                         if (dynCurrentStreak > dynBestStreak) dynBestStreak = dynCurrentStreak
                     } else {
@@ -253,20 +292,15 @@ function ProfileContent() {
                     }
                 }
             }
+
             setTotalPoints(dynTotal)
             setExactCount(dynExact)
             setCurrentStreak(dynCurrentStreak)
             setBestStreak(dynBestStreak)
 
             let cum = 0
-            const prog = hist.map(m => {
-                cum += m.points
-                return cum
-            })
-            // add starting zero
-            setPointsProgression([0, ...prog])
+            setPointsProgression([0, ...hist.map(m => { cum += m.points; return cum })])
 
-            // Calculate Badge Progress
             const progress = getBadgeProgress({
                 userId: targetUserId,
                 predictions: allPredictions,
@@ -281,30 +315,36 @@ function ProfileContent() {
         init()
     }, [searchParams])
 
-    // Badges & DNA
     const badges = BADGE_DEFINITIONS.map(b => {
         const p = badgeProgress[b.id] || { current: 0, target: 1 }
         return {
             ...b,
             progress: Math.min(p.current, p.target),
             maxProgress: p.target,
-            unlocked: earnedBadges.has(b.id)
+            unlocked: earnedBadges.has(b.id),
         }
     })
     const unlockedCount = badges.filter(b => b.unlocked).length
+
     const finishedPredictedMatches = historyMatches.filter(m =>
         (m.status === 'FINISHED' || m.status === 'finished') &&
-        m.pred_home_score !== null &&
-        m.pred_home_score !== undefined
+        m.pred_home_score !== null && m.pred_home_score !== undefined
     )
-    const finishedCorrectOutcomeMatches = finishedPredictedMatches.filter(m =>
-        ['exact', 'correct', 'goal_diff'].includes(m.type)
+    const finishedCorrectOutcomeMatches = finishedPredictedMatches.filter(
+        m => m.type === 'exact' || m.type === 'correct'
     )
-    const accuracy = predCount > 0 ? Math.round((exactCount / predCount) * 100) : 0
     const resultAccuracy = finishedPredictedMatches.length > 0
         ? Math.round((finishedCorrectOutcomeMatches.length / finishedPredictedMatches.length) * 100)
         : 0
-    const dnaProfile = exactCount >= 5 ? DNA_PROFILES[0] : predCount >= 30 && resultAccuracy < 40 ? DNA_PROFILES[2] : predCount >= 20 ? DNA_PROFILES[1] : DNA_PROFILES[3]
+
+    const dnaProfile = exactCount >= 5
+        ? DNA_PROFILES[0]
+        : predCount >= 30 && resultAccuracy < 40
+            ? DNA_PROFILES[2]
+            : predCount >= 20
+                ? DNA_PROFILES[1]
+                : DNA_PROFILES[3]
+
     const displayName = profile?.display_name ?? 'Player'
     const filteredBadges = activeFilter === 'all' ? badges : badges.filter(b => b.tier === activeFilter)
 
@@ -317,7 +357,6 @@ function ProfileContent() {
         )
     }
 
-    // Graph points logic
     const maxProgPoints = Math.max(...pointsProgression, 10)
     const svgWidth = 800
     const svgHeight = 200
@@ -337,8 +376,8 @@ function ProfileContent() {
                 <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.022, backgroundImage: 'linear-gradient(var(--cream) 1px,transparent 1px),linear-gradient(90deg,var(--cream) 1px,transparent 1px)', backgroundSize: '48px 48px' }} />
 
                 <div className="resp-flex-stack resp-padding" style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 40px 44px', position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 32 }}>
-                    <img 
-                        src={getRobohashUrl(displayName, 120)} 
+                    <img
+                        src={getRobohashUrl(displayName, 120)}
                         alt="Avatar"
                         className="resp-hero-avatar"
                         style={{ width: 120, height: 120, borderRadius: '50%', background: profile?.avatar_color || 'var(--surface2)', border: '4px solid var(--gold)', objectFit: 'cover', boxShadow: '0 0 40px rgba(212,168,67,0.3)' }}
@@ -350,14 +389,18 @@ function ProfileContent() {
                         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                             <span style={{ fontSize: 16, color: 'var(--gold)', fontWeight: 600 }}>{totalPoints} Points</span>
                             <span style={{ fontSize: 14, color: 'var(--muted)' }}>•</span>
-                            <span style={{ fontSize: 14, color: 'var(--dim)' }}>Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : 'recently'}</span>
+                            <span style={{ fontSize: 14, color: 'var(--dim)' }}>
+                                Joined {profile?.created_at
+                                    ? new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+                                    : 'recently'}
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div className="resp-padding" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 40px' }}>
-                
+
                 {/* ── KPI & PROGRESSION GRAPH ROW ── */}
                 <div className="resp-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24, marginBottom: 52 }}>
                     {/* KPIs */}
@@ -365,14 +408,13 @@ function ProfileContent() {
                         {[
                             { icon: '🎯', label: 'Exact Scores', value: exactCount, accent: '#e05c4a' },
                             { icon: '📊', label: 'Result Accuracy', value: `${resultAccuracy}%`, accent: '#5b9fff' },
-                            { icon: '🎁', label: 'Correct Qualifiers', value: `${qualifiersBonus} (+${qualifiersBonus} pts)`, accent: '#a855f7' },
                             { icon: '🔥', label: 'Current Streak', value: currentStreak > 0 ? `${currentStreak}` : '—', accent: '#22c55e' },
                             { icon: '🏆', label: 'Best Streak', value: bestStreak, accent: 'var(--gold)' },
                             { icon: '⚽', label: 'Total Predictions', value: `${predCount} / 104`, accent: 'var(--gold)' },
                         ].map(c => (
                             <div key={c.label} style={{ background: 'var(--surface2)', border: `1px solid var(--border)`, borderRadius: 16, padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    {c.icon && <span style={{ fontSize: 24 }}>{c.icon}</span>}
+                                    <span style={{ fontSize: 24 }}>{c.icon}</span>
                                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--dim)' }}>{c.label}</span>
                                 </div>
                                 <div style={{ fontFamily: 'Bebas Neue', fontSize: 32, color: c.accent }}>{c.value}</div>
@@ -386,18 +428,13 @@ function ProfileContent() {
                             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)', textTransform: 'uppercase', letterSpacing: 1.5 }}>Points Progression</div>
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>Cumulative Points</div>
                         </div>
-                        
                         <div style={{ flex: 1, position: 'relative', minHeight: 200, display: 'flex', alignItems: 'flex-end', paddingTop: 20 }}>
-                            {/* Grid Lines */}
                             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', pointerEvents: 'none' }}>
                                 {[...Array(5)].map((_, i) => (
                                     <div key={i} style={{ borderBottom: '1px dashed rgba(255,255,255,0.05)', width: '100%', height: '25%' }} />
                                 ))}
                             </div>
-                            
-                            {/* SVG Graph */}
                             <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible', position: 'relative', zIndex: 10 }} preserveAspectRatio="none">
-                                {/* Gradient Fill under line */}
                                 <defs>
                                     <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.3" />
@@ -420,7 +457,7 @@ function ProfileContent() {
                                     strokeLinejoin="round"
                                     initial={{ pathLength: 0 }}
                                     animate={{ pathLength: 1 }}
-                                    transition={{ duration: 1.5, ease: "easeOut" }}
+                                    transition={{ duration: 1.5, ease: 'easeOut' }}
                                 />
                             </svg>
                         </div>
@@ -437,70 +474,97 @@ function ProfileContent() {
                             <div style={{ textAlign: 'right' }}>Points Earned</div>
                         </div>
 
-                        {historyMatches.length > 0 ? historyMatches.slice().reverse().slice(0, visibleHistoryCount).map((m, i) => (
-                            <div key={i} className="match-card" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '20px 24px', borderBottom: i < historyMatches.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                                
-                                {/* DESKTOP LAYOUT */}
-                                <div className="desktop-only" style={{ fontSize: 12, color: 'var(--dim)' }}>
-                                    {new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}<br/>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                        {new Date(m.kickoff).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                                
-                                <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36, textAlign: 'right' }}>{m.home_team}</span>
-                                    <div style={{ background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 6, fontSize: 14, fontFamily: 'Bebas Neue', letterSpacing: 1, color: 'var(--cream)', border: '1px solid var(--border)' }}>
-                                        {m.real_home_score} - {m.real_away_score}
-                                    </div>
-                                    <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36 }}>{m.away_team}</span>
-                                </div>
+                        {historyMatches.length > 0
+                            ? historyMatches.slice().reverse().slice(0, visibleHistoryCount).map((m, i) => {
+                                const hasPred = m.pred_home_score !== null && m.pred_home_score !== undefined
+                                return (
+                                    <div key={i} className="match-card" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr 1fr', gap: 16, padding: '20px 24px', borderBottom: i < historyMatches.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
 
-                                <div className="desktop-only" style={{ textAlign: 'center' }}>
-                                    <div style={{ background: m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'rgba(212,168,67,0.1)' : m.type === 'correct' || m.type === 'goal_diff' ? 'rgba(91,159,255,0.1)' : 'var(--surface3)') : 'var(--black)', color: m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#5b9fff' : 'var(--muted)') : 'var(--muted)', border: `1px solid ${m.pred_home_score !== null && m.pred_home_score !== undefined ? (m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#5b9fff' : 'var(--border)') : 'rgba(255,255,255,0.1)'}`, padding: '4px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>
-                                        {m.pred_home_score !== null && m.pred_home_score !== undefined ? `${m.pred_home_score} - ${m.pred_away_score}` : 'Missed'}
-                                    </div>
-                                </div>
-                                <div className="desktop-only" style={{ textAlign: 'right', fontFamily: 'Bebas Neue', fontSize: 24, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
-                                    +{m.points}
-                                </div>
-
-                                {/* MOBILE LAYOUT */}
-                                <div className="match-card-mobile-only match-card-mobile-header">
-                                    <div>{new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                                    <div style={{ color: 'var(--gold)' }}>{m.group_label}</div>
-                                </div>
-                                <div className="match-card-mobile-only match-card-mobile-teams">
-                                    <span style={{ fontSize: 16, width: 40, textAlign: 'right', color: 'var(--dim)' }}>{m.home_team}</span>
-                                    <span>{m.real_home_score} - {m.real_away_score}</span>
-                                    <span style={{ fontSize: 16, width: 40, textAlign: 'left', color: 'var(--dim)' }}>{m.away_team}</span>
-                                </div>
-                                <div className="match-card-mobile-only match-card-mobile-footer">
-                                    <div>
-                                        <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', marginRight: 8 }}>Pick:</span>
-                                        {m.pred_home_score !== null && m.pred_home_score !== undefined ? (
-                                            <span style={{ fontSize: 14, fontWeight: 700, color: m.type === 'exact' ? 'var(--gold)' : m.type === 'correct' || m.type === 'goal_diff' ? '#10b981' : 'var(--cream)' }}>
-                                                {m.pred_home_score} - {m.pred_away_score}
-                                                {m.type === 'exact' && <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(212,168,67,0.2)', color: 'var(--gold)', padding: '2px 4px', borderRadius: 4 }}>EXACT</span>}
+                                        {/* DESKTOP */}
+                                        <div className="desktop-only" style={{ fontSize: 12, color: 'var(--dim)' }}>
+                                            {new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}<br />
+                                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                                {new Date(m.kickoff).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                             </span>
-                                        ) : (
-                                            <span style={{ fontSize: 12, color: 'var(--red-accent)' }}>Missed</span>
-                                        )}
+                                        </div>
+
+                                        <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36, textAlign: 'right' }}>{m.home_team}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                                                <div style={{ background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 6, fontSize: 14, fontFamily: 'Bebas Neue', letterSpacing: 1, color: 'var(--cream)', border: '1px solid var(--border)' }}>
+                                                    {m.real_home_score} - {m.real_away_score}
+                                                </div>
+                                                {m.went_to_penalties && (
+                                                    <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                                                        Pen: {m.penalty_home_score}-{m.penalty_away_score}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span style={{ fontWeight: 600, color: 'var(--cream)', width: 36 }}>{m.away_team}</span>
+                                        </div>
+
+                                        <div className="desktop-only" style={{ textAlign: 'center' }}>
+                                            <div style={{
+                                                background: hasPred ? predBg(m.type) : 'var(--black)',
+                                                color: hasPred ? predColor(m.type) : 'var(--muted)',
+                                                border: `1px solid ${hasPred ? predBorder(m.type) : 'rgba(255,255,255,0.1)'}`,
+                                                padding: '4px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, letterSpacing: 1,
+                                            }}>
+                                                {hasPred ? `${m.pred_home_score} - ${m.pred_away_score}` : 'Missed'}
+                                            </div>
+                                        </div>
+
+                                        <div className="desktop-only" style={{ textAlign: 'right', fontFamily: 'Bebas Neue', fontSize: 24, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
+                                            +{m.points}
+                                        </div>
+
+                                        {/* MOBILE */}
+                                        <div className="match-card-mobile-only match-card-mobile-header">
+                                            <div>{new Date(m.kickoff).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                            <div style={{ color: 'var(--gold)' }}>{m.group_label}</div>
+                                        </div>
+                                        <div className="match-card-mobile-only match-card-mobile-teams">
+                                            <span style={{ fontSize: 16, width: 40, textAlign: 'right', color: 'var(--dim)' }}>{m.home_team}</span>
+                                            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                <span>{m.real_home_score} - {m.real_away_score}</span>
+                                                {m.went_to_penalties && (
+                                                    <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'DM Mono, monospace' }}>
+                                                        Pen: {m.penalty_home_score}-{m.penalty_away_score}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span style={{ fontSize: 16, width: 40, textAlign: 'left', color: 'var(--dim)' }}>{m.away_team}</span>
+                                        </div>
+                                        <div className="match-card-mobile-only match-card-mobile-footer">
+                                            <div>
+                                                <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', marginRight: 8 }}>Pick:</span>
+                                                {hasPred ? (
+                                                    <span style={{ fontSize: 14, fontWeight: 700, color: mobilePredColor(m.type) }}>
+                                                        {m.pred_home_score} - {m.pred_away_score}
+                                                        {m.type === 'exact' && (
+                                                            <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(212,168,67,0.2)', color: 'var(--gold)', padding: '2px 4px', borderRadius: 4 }}>EXACT</span>
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ fontSize: 12, color: 'var(--red-accent)' }}>Missed</span>
+                                                )}
+                                            </div>
+                                            <div style={{ fontSize: 16, fontWeight: 800, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
+                                                +{m.points} pts
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: m.points > 0 ? 'var(--gold)' : 'var(--muted)' }}>
-                                        +{m.points} pts
-                                    </div>
+                                )
+                            })
+                            : (
+                                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
+                                    No completed predictions yet.
                                 </div>
-                            </div>
-                        )) : (
-                            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-                                No completed predictions yet.
-                            </div>
-                        )}
+                            )}
 
                         {historyMatches.length > visibleHistoryCount && (
                             <div style={{ padding: 16, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
-                                <button 
+                                <button
                                     onClick={() => setVisibleHistoryCount(v => v + 10)}
                                     style={{ padding: '8px 24px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--cream)', fontSize: 13, cursor: 'pointer' }}>
                                     Load More
@@ -526,7 +590,6 @@ function ProfileContent() {
                             const tierBadges = filteredBadges.filter(b => b.tier === tierKey)
                             if (tierBadges.length === 0) return null
                             const t = TIER_CONFIG[tierKey]
-                            
                             return (
                                 <div key={tierKey}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -562,7 +625,6 @@ function ProfileContent() {
 
             </div>
 
-            {/* Badge detail modal */}
             {selectedBadge && <BadgeModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />}
         </div>
     )
@@ -585,22 +647,17 @@ function Section({ label, children, right }: { label: string; children: React.Re
 
 function BadgeCard({ badge, onClick }: { badge: any; onClick: () => void }) {
     const t = TIER_CONFIG[badge.tier as Tier]
-    const pct = badge.maxProgress > 1 ? Math.round((badge.progress / badge.maxProgress) * 100) : badge.unlocked ? 100 : 0
-
     return (
-        <div onClick={onClick} style={{ 
-            background: badge.unlocked ? t.bg : 'var(--surface2)', 
-            border: `1px solid ${badge.unlocked ? t.border : 'var(--border)'}`, 
-            borderRadius: 14, 
-            padding: '16px', 
-            cursor: 'pointer', 
-            opacity: badge.unlocked ? 1 : 0.5, 
+        <div onClick={onClick} style={{
+            background: badge.unlocked ? t.bg : 'var(--surface2)',
+            border: `1px solid ${badge.unlocked ? t.border : 'var(--border)'}`,
+            borderRadius: 14, padding: '16px', cursor: 'pointer',
+            opacity: badge.unlocked ? 1 : 0.5,
             filter: badge.unlocked ? 'none' : 'grayscale(1)',
             boxShadow: badge.unlocked ? `0 0 24px ${t.glow}, inset 0 0 12px ${t.glow}` : 'none',
             transform: badge.unlocked ? 'translateY(-2px)' : 'none',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            position: 'relative',
-            overflow: 'hidden'
+            position: 'relative', overflow: 'hidden',
         }}>
             {badge.unlocked && (
                 <div style={{ position: 'absolute', top: -20, right: -20, width: 60, height: 60, background: `radial-gradient(circle, ${t.color}33 0%, transparent 70%)`, pointerEvents: 'none' }} />

@@ -1,3 +1,5 @@
+// src/app/live-bracket/LiveBracketClient.tsx
+
 'use client'
 
 import { useMemo, useState } from 'react'

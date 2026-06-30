@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     const dbMatches = await supabase
         .from('matches')
-        .select('id, home_team, away_team, home_score, away_score, kickoff, status, qualifier')
+        .select('id, home_team, away_team, home_score, away_score, penalty_home_score, penalty_away_score, went_to_penalties, kickoff, status, qualifier')
 
     if (dbMatches.error) return badRequest(dbMatches.error.message, 500)
 

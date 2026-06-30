@@ -1,3 +1,4 @@
+// src/app/live-bracket/page.tsx
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/pagination'
@@ -23,7 +24,7 @@ export default async function LiveBracketPage() {
     }
 
     const dbMatches = await fetchAllRows(
-        supabase.from('matches').select('id, home_team, away_team, home_score, away_score, kickoff, status, qualifier')
+        supabase.from('matches').select('id, home_team, away_team, home_score, away_score, penalty_home_score, penalty_away_score, went_to_penalties, kickoff, status, qualifier')
     )
 
     let apiMatches: any[] = []

@@ -50,16 +50,23 @@ async function fetchApiFinishedMatches(dbMatches: any[]) {
             const awayScore = apiMatch.score?.fullTime?.away
             if (!homeCode || !awayCode || typeof homeScore !== 'number' || typeof awayScore !== 'number') continue
 
-            const staticMatch = ALL_MATCHES.find(m => m.home_team === homeCode && m.away_team === awayCode)
-            if (!staticMatch) continue
-
             const dbMatch = dbMatches.find((m: any) => m.home_team === homeCode && m.away_team === awayCode)
+            if (!dbMatch) {
+                console.warn('[LeaderboardPage] Finished API match has no DB match', {
+                    home: homeCode,
+                    away: awayCode,
+                    status: apiMatch.status,
+                })
+                continue
+            }
+
+            const staticMatch = ALL_MATCHES.find(m => m.id === dbMatch.id)
+            if (!staticMatch) continue
 
             finished.push({
                 ...staticMatch,
                 stage: dbMatch?.stage ?? (isGroupStageLabel(staticMatch.group_label) ? 'group' : staticMatch.group_label),
                 qualifier: dbMatch?.qualifier ?? staticMatch.qualifier ?? null,
-                multiplier: dbMatch?.multiplier ?? staticMatch.multiplier ?? 1,
                 home_score: homeScore,
                 away_score: awayScore,
                 status: 'finished',
@@ -89,10 +96,9 @@ export default async function LeaderboardPage() {
     )
 
     // 2. Fetch raw prediction data and recompute totals instead of trusting cached scores.
-    const [groupPredData, bracketPredData, scoresData, matchesData] = await Promise.all([
+    const [groupPredData, bracketPredData, matchesData] = await Promise.all([
         fetchAllRows(supabase.from('predictions').select('*')),
         fetchAllRows(supabase.from('live_ko_picks').select('*')),
-        fetchAllRows(supabase.from('scores').select('user_id, bracket_bonus_points')),
         fetchAllRows(supabase.from('matches').select('*')),
     ])
 
@@ -108,12 +114,6 @@ export default async function LeaderboardPage() {
     const bracketPredCounts = new Map<string, number>()
     for (const row of bracketPredData) {
         bracketPredCounts.set(row.user_id, (bracketPredCounts.get(row.user_id) ?? 0) + 1)
-    }
-
-    const bracketBonusByUser = new Map<string, number>()
-    for (const row of scoresData) {
-        const current = bracketBonusByUser.get(row.user_id) ?? 0
-        bracketBonusByUser.set(row.user_id, Math.max(current, row.bracket_bonus_points ?? 0))
     }
 
     const dbFinishedMatches = matchesData
@@ -135,7 +135,6 @@ export default async function LeaderboardPage() {
         finishedMatches,
         groupPredData,
         bracketPredData,
-        bracketBonusByUser,
     )
 
     // 5. Build unified leaderboard with all users

@@ -1,3 +1,4 @@
+// src/app/fixtures/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Nav from '@/components/Nav'
@@ -27,18 +28,19 @@ export default async function FixturesPage() {
     // Fetch DB matches to know status and scores of finished/live games
     const { data: dbMatches } = await supabase
         .from('matches')
-        .select('id, status, home_score, away_score, kickoff, home_team, away_team, qualifier, stage')
+        // .select('id, status, home_score, away_score, kickoff, home_team, away_team, qualifier, stage')
+        .select('id, status, home_score, away_score, kickoff, home_team, away_team, qualifier, stage, went_to_penalties, penalty_home_score, penalty_away_score')
 
     const displayName = profile?.display_name ?? profile?.email ?? 'Player'
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
             <Nav initials={profile?.avatar_initials ?? 'PL'} displayName={displayName} isGuest={!user} />
-            
+
             <div style={{ paddingTop: 100 }}>
-                <FixturesClient 
-                    predictions={preds ?? []} 
-                    dbMatches={dbMatches ?? []} 
+                <FixturesClient
+                    predictions={preds ?? []}
+                    dbMatches={dbMatches ?? []}
                     liveKoPicks={liveKoPicks}
                 />
             </div>

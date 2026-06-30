@@ -28,7 +28,6 @@ export interface RecalcResult {
     total_points: number
     exact_scores: number
     correct_results: number
-    bracket_bonus_points: number
 }
 
 /**
@@ -49,7 +48,7 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
         fetchAllRows(db.from('predictions').select('*')),
         fetchAllRows(db.from('live_ko_picks').select('*')),
         fetchAllRows(db.from('group_members').select('user_id, group_id')),
-        fetchAllRows(db.from('scores').select('user_id, group_id, bracket_bonus_points')),
+        fetchAllRows(db.from('scores').select('user_id, group_id')),
     ])
 
     const finishedMatches = matches
@@ -88,12 +87,6 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
         }
     }
 
-    // Build bracket bonus lookup per (user, group)
-    const bonusByUserGroup = new Map<string, number>()
-    for (const s of existingScores) {
-        bonusByUserGroup.set(`${s.user_id}:${s.group_id}`, s.bracket_bonus_points || 0)
-    }
-
     // Determine which users to process
     const targetUserIds = userIdFilter
         ? userIdFilter.filter(uid => membershipsByUser.has(uid))
@@ -120,32 +113,17 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
                 continue
             }
 
-            // Determine which scores to use (original vs repredicted)
-            const predHome = !prediction.is_repredicted && typeof prediction.original_home_score === 'number'
-                ? prediction.original_home_score
-                : prediction.home_score
-            const predAway = !prediction.is_repredicted && typeof prediction.original_away_score === 'number'
-                ? prediction.original_away_score
-                : prediction.away_score
+            const predHome = prediction.home_score
+            const predAway = prediction.away_score
 
             if (typeof predHome !== 'number' || typeof predAway !== 'number') {
                 streak = 0
                 continue
             }
 
-            // Check fixture correctness for knockout matches
-            const isFixtureCorrect = isKnockout
-                ? true
-                : !prediction.predicted_home_team ||
-                    !prediction.predicted_away_team ||
-                    (prediction.predicted_home_team === match.home_team && prediction.predicted_away_team === match.away_team)
-
             const options = {
                 predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
                 realQualifier: match.qualifier || null,
-                isRepredicted: !!prediction.is_repredicted,
-                multiplier: match.multiplier || 1,
-                isFixtureCorrect,
             }
 
             const result = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, options)
@@ -156,7 +134,7 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
                 exact_scores++
             }
 
-            if (['exact', 'correct', 'goal_diff'].includes(result.type)) {
+            if (['exact', 'correct'].includes(result.type)) {
                 correct_results++
                 streak++
             } else {
@@ -216,23 +194,18 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
             total_points: totals.total_points,
             exact_scores: totals.exact_scores,
             correct_results: totals.correct_results,
-            bracket_bonus_points: 0, // Will be added per-group below
         })
 
         for (const groupId of groupIds) {
-            const bracketBonus = bonusByUserGroup.get(`${userId}:${groupId}`) || 0
-            const finalTotal = totals.total_points + bracketBonus
-
             const { error } = await db
                 .from('scores')
                 .upsert({
                     user_id: userId,
                     group_id: groupId,
-                    total_points: finalTotal,
+                    total_points: totals.total_points,
                     exact_scores: totals.exact_scores,
                     correct_results: totals.correct_results,
                     streak: totals.streak,
-                    bracket_bonus_points: bracketBonus,
                     updated_at: new Date().toISOString(),
                 }, {
                     onConflict: 'user_id,group_id',
