@@ -15,7 +15,21 @@ import { evaluateBadges } from '@/lib/badges'
 // ─────────────────────────────────────────────────────────────────────────────
 
 function isKnockoutMatch(match: any) {
+    if (['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(match.group_label)) return true
     return match.stage ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage) : false
+}
+
+function inferQualifier(match: any): string | null {
+    if (match.qualifier) return match.qualifier
+    if (match.went_to_penalties && typeof match.penalty_home_score === 'number' && typeof match.penalty_away_score === 'number') {
+        if (match.penalty_home_score > match.penalty_away_score) return match.home_team ?? null
+        if (match.penalty_away_score > match.penalty_home_score) return match.away_team ?? null
+    }
+    if (typeof match.home_score === 'number' && typeof match.away_score === 'number') {
+        if (match.home_score > match.away_score) return match.home_team ?? null
+        if (match.away_score > match.home_score) return match.away_team ?? null
+    }
+    return null
 }
 
 function matchIdForPick(pick: any) {
@@ -123,7 +137,7 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
 
             const options = {
                 predQualifier: prediction.qualifier_pick || prediction.qualifier || prediction.team_code || null,
-                realQualifier: match.qualifier || null,
+                realQualifier: isKnockout ? inferQualifier(match) : null,
             }
 
             const result = scoreMatch(predHome, predAway, match.home_score, match.away_score, isKnockout, options)

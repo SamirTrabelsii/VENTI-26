@@ -10,6 +10,28 @@ import { GROUP_MATCHES, KNOCKOUT_MATCHES, TEAMS, getFlagUrl, getRobohashUrl } fr
 import { motion } from 'framer-motion'
 
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+const KNOCKOUT_LABELS = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL']
+
+function isKnockoutMatch(match: any, staticMatch?: any): boolean {
+    const groupLabel = match?.group_label ?? staticMatch?.group_label
+    if (KNOCKOUT_LABELS.includes(groupLabel)) return true
+    return match?.stage
+        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
+        : false
+}
+
+function inferQualifier(match: any): string | null {
+    if (match?.qualifier) return match.qualifier
+    if (match?.went_to_penalties && typeof match.penalty_home_score === 'number' && typeof match.penalty_away_score === 'number') {
+        if (match.penalty_home_score > match.penalty_away_score) return match.home_team ?? null
+        if (match.penalty_away_score > match.penalty_home_score) return match.away_team ?? null
+    }
+    if (typeof match?.home_score === 'number' && typeof match?.away_score === 'number') {
+        if (match.home_score > match.away_score) return match.home_team ?? null
+        if (match.away_score > match.home_score) return match.away_team ?? null
+    }
+    return null
+}
 
 function matchIdForLiveKoPick(pick: any) {
     if (pick.round === 'final' || pick.round === 'third_place') return pick.round
@@ -107,6 +129,9 @@ function ProfileContent() {
             }))
 
             const allPredictions = [...(predictions || []), ...normalizedLiveKoPicks]
+            const predictionByMatch = new Map<string, any>()
+            for (const p of predictions || []) predictionByMatch.set(p.match_id, p)
+            for (const p of normalizedLiveKoPicks) predictionByMatch.set(p.match_id, p)
 
             const { data: dbBadges } = await supabase.from('user_badges').select('badge_id').eq('user_id', targetUserId)
             setEarnedBadges(new Set((dbBadges || []).map(b => b.badge_id)))
@@ -156,12 +181,22 @@ function ProfileContent() {
                 // Use DB match for real team names and qualifier
                 const realHomeTeam = dbMatch.home_team
                 const realAwayTeam = dbMatch.away_team
-                const realQualifier = dbMatch?.qualifier ?? null
+                const realQualifier = dbMatch?.qualifier ?? lm.qualifier ?? inferQualifier({
+                    ...dbMatch,
+                    home_score: lm.score.fullTime.home,
+                    away_score: lm.score.fullTime.away,
+                    penalty_home_score: lm.score?.penalties?.home ?? dbMatch.penalty_home_score,
+                    penalty_away_score: lm.score?.penalties?.away ?? dbMatch.penalty_away_score,
+                    went_to_penalties: lm.score?.went_to_penalties || dbMatch.went_to_penalties,
+                }) ?? staticMatch.qualifier ?? null
+                const wentToPenalties = Boolean(lm.score?.went_to_penalties || lm.score?.penalties || dbMatch.went_to_penalties)
+                const penaltyHomeScore = lm.score?.penalties?.home ?? dbMatch.penalty_home_score ?? null
+                const penaltyAwayScore = lm.score?.penalties?.away ?? dbMatch.penalty_away_score ?? null
 
-                const pred = allPredictions.find(p => p.match_id === dbMatch.id)
+                const pred = predictionByMatch.get(dbMatch.id)
 
                 if (pred && typeof pred.home_score === 'number') {
-                    const isKnockout = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(staticMatch.group_label)
+                    const isKnockout = isKnockoutMatch(dbMatch, staticMatch)
                     const res = scoreMatch(
                         pred.home_score,
                         pred.away_score,
@@ -179,9 +214,9 @@ function ProfileContent() {
                         away_team: realAwayTeam,
                         real_home_score: lm.score.fullTime.home,
                         real_away_score: lm.score.fullTime.away,
-                        went_to_penalties: dbMatch.went_to_penalties ?? false,
-                        penalty_home_score: dbMatch.penalty_home_score ?? null,
-                        penalty_away_score: dbMatch.penalty_away_score ?? null,
+                        went_to_penalties: wentToPenalties,
+                        penalty_home_score: penaltyHomeScore,
+                        penalty_away_score: penaltyAwayScore,
                         pred_home_score: pred.home_score,
                         pred_away_score: pred.away_score,
                         points: res.total,
@@ -195,9 +230,9 @@ function ProfileContent() {
                         away_team: realAwayTeam,
                         real_home_score: lm.score.fullTime.home,
                         real_away_score: lm.score.fullTime.away,
-                        went_to_penalties: dbMatch.went_to_penalties ?? false,
-                        penalty_home_score: dbMatch.penalty_home_score ?? null,
-                        penalty_away_score: dbMatch.penalty_away_score ?? null,
+                        went_to_penalties: wentToPenalties,
+                        penalty_home_score: penaltyHomeScore,
+                        penalty_away_score: penaltyAwayScore,
                         pred_home_score: null,
                         pred_away_score: null,
                         points: 0,
@@ -213,7 +248,7 @@ function ProfileContent() {
                 if (processedMatchIds.has(dbm.id)) continue
 
                 const staticMatch = ALL_MATCHES.find(m => m.id === dbm.id)
-                const pred = allPredictions.find(p => p.match_id === dbm.id)
+                const pred = predictionByMatch.get(dbm.id)
 
                 if (typeof dbm.home_score !== 'number') continue
 
@@ -222,9 +257,7 @@ function ProfileContent() {
                 const realAwayTeam = dbm.away_team ?? staticMatch?.away_team
 
                 if (pred && typeof pred.home_score === 'number') {
-                    const isKnockout = dbm.stage
-                        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(dbm.stage)
-                        : false
+                    const isKnockout = isKnockoutMatch(dbm, staticMatch)
                     const res = scoreMatch(
                         pred.home_score,
                         pred.away_score,
@@ -233,7 +266,7 @@ function ProfileContent() {
                         isKnockout,
                         {
                             predQualifier: pred.qualifier_pick ?? pred.team_code ?? null,
-                            realQualifier: dbm.qualifier ?? null,
+                            realQualifier: isKnockout ? inferQualifier(dbm) ?? staticMatch?.qualifier ?? null : null,
                         }
                     )
                     hist.push({

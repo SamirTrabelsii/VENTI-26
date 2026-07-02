@@ -10,24 +10,51 @@ function stageForGroupLabel(groupLabel: string): string {
     return knockoutLabels.includes(groupLabel) ? groupLabel : 'group_stage'
 }
 
+function hasScorePair(score: any) {
+    return score?.home !== null && score?.home !== undefined
+        && score?.away !== null && score?.away !== undefined
+}
+
+function sameScore(a: any, b: any) {
+    return hasScorePair(a) && hasScorePair(b) && a.home === b.home && a.away === b.away
+}
+
+function addScores(a: any, b: any) {
+    return { home: a.home + b.home, away: a.away + b.away }
+}
+
 function extractScore(apiM: any) {
     const wentToPenalties = apiM.score?.penalties?.home !== null && apiM.score?.penalties?.home !== undefined
-    const wentToExtraTime = apiM.score?.extraTime?.home !== null && apiM.score?.extraTime?.home !== undefined
+    const regularTime = apiM.score?.regularTime
+    const extraTime = apiM.score?.extraTime
+    const fullTime = apiM.score?.fullTime
 
-    let regHome: number | null = null
-    let regAway: number | null = null
+    let scoreHome: number | null = null
+    let scoreAway: number | null = null
 
-    if (apiM.score?.regularTime?.home !== null && apiM.score?.regularTime?.home !== undefined) {
-        regHome = apiM.score.regularTime.home
-        regAway = apiM.score.regularTime.away
-    } else if (!wentToPenalties && !wentToExtraTime) {
-        regHome = apiM.score?.fullTime?.home ?? null
-        regAway = apiM.score?.fullTime?.away ?? null
+    if (hasScorePair(extraTime) && hasScorePair(regularTime)) {
+        const combined = addScores(regularTime, extraTime)
+        if (sameScore(fullTime, combined) || sameScore(fullTime, extraTime)) {
+            scoreHome = fullTime.home
+            scoreAway = fullTime.away
+        } else if (extraTime.home >= regularTime.home && extraTime.away >= regularTime.away) {
+            scoreHome = extraTime.home
+            scoreAway = extraTime.away
+        } else {
+            scoreHome = combined.home
+            scoreAway = combined.away
+        }
+    } else if (hasScorePair(fullTime)) {
+        scoreHome = fullTime.home
+        scoreAway = fullTime.away
+    } else if (hasScorePair(regularTime)) {
+        scoreHome = regularTime.home
+        scoreAway = regularTime.away
     }
 
     return {
-        home_score: regHome,
-        away_score: regAway,
+        home_score: scoreHome,
+        away_score: scoreAway,
         penalty_home_score: wentToPenalties ? apiM.score.penalties.home : null,
         penalty_away_score: wentToPenalties ? apiM.score.penalties.away : null,
         went_to_penalties: wentToPenalties,

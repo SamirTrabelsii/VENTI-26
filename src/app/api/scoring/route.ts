@@ -6,6 +6,26 @@ import { scoreMatch } from '@/lib/scoring'
 import { fetchAllRows } from '@/lib/supabase/pagination'
 import { roundSlotFromFixtureId } from '@/lib/live-bracket'
 
+function isKnockoutMatch(match: any) {
+    if (['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(match.group_label)) return true
+    return match.stage
+        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
+        : false
+}
+
+function inferQualifier(match: any): string | null {
+    if (match.qualifier) return match.qualifier
+    if (match.went_to_penalties && typeof match.penalty_home_score === 'number' && typeof match.penalty_away_score === 'number') {
+        if (match.penalty_home_score > match.penalty_away_score) return match.home_team ?? null
+        if (match.penalty_away_score > match.penalty_home_score) return match.away_team ?? null
+    }
+    if (typeof match.home_score === 'number' && typeof match.away_score === 'number') {
+        if (match.home_score > match.away_score) return match.home_team ?? null
+        if (match.away_score > match.home_score) return match.away_team ?? null
+    }
+    return null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/scoring
 // Triggered after a match finishes. Scores every prediction for that match
@@ -53,11 +73,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Match has no scores yet' }, { status: 400 })
     }
 
-    const isKnockout = match.stage
-        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
-        : false
+    const isKnockout = isKnockoutMatch(match)
 
-    const realQualifier: string | null = match.qualifier ?? null
+    const realQualifier: string | null = isKnockout ? inferQualifier(match) : null
 
     // ── 2. Load predictions for this match ────────────────────────────────────
     const predictions = await fetchAllRows(
@@ -185,11 +203,9 @@ export async function GET(request: Request) {
             .eq('match_id', match_id)
     )
 
-    const isKnockout = match.stage
-        ? !['group', 'group_stage', 'GROUP_STAGE'].includes(match.stage)
-        : false
+    const isKnockout = isKnockoutMatch(match)
 
-    const realQualifier: string | null = match.qualifier ?? null
+    const realQualifier: string | null = isKnockout ? inferQualifier(match) : null
 
     const breakdown = (predsData || []).map((p: any) => {
         const profile = Array.isArray(p.profile) ? p.profile[0] : p.profile

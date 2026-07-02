@@ -23,26 +23,51 @@ const NAME_TO_CODE: Record<string, string> = {
     'Ghana': 'GHA', 'Panama': 'PAN',
 }
 
-// Returns regulation (90-min) score in fullTime, penalty data separately.
-// football-data.org fullTime includes ET/penalties; regularTime is 90-min only.
+function hasScorePair(score: any) {
+    return score?.home !== null && score?.home !== undefined
+        && score?.away !== null && score?.away !== undefined
+}
+
+function sameScore(a: any, b: any) {
+    return hasScorePair(a) && hasScorePair(b) && a.home === b.home && a.away === b.away
+}
+
+function addScores(a: any, b: any) {
+    return { home: a.home + b.home, away: a.away + b.away }
+}
+
+// Returns the score after 120 minutes, with penalty data kept separately.
 function extractLiveScore(m: any) {
     const wentToPenalties = m.score?.penalties?.home !== null && m.score?.penalties?.home !== undefined
-    const wentToExtraTime = m.score?.extraTime?.home !== null && m.score?.extraTime?.home !== undefined
+    const regularTime = m.score?.regularTime
+    const extraTime = m.score?.extraTime
+    const fullTime = m.score?.fullTime
 
-    let regHome: number | null = null
-    let regAway: number | null = null
+    let scoreHome: number | null = null
+    let scoreAway: number | null = null
 
-    if (m.score?.regularTime?.home !== null && m.score?.regularTime?.home !== undefined) {
-        regHome = m.score.regularTime.home
-        regAway = m.score.regularTime.away
-    } else if (!wentToPenalties && !wentToExtraTime) {
-        regHome = m.score?.fullTime?.home ?? null
-        regAway = m.score?.fullTime?.away ?? null
+    if (hasScorePair(extraTime) && hasScorePair(regularTime)) {
+        const combined = addScores(regularTime, extraTime)
+        if (sameScore(fullTime, combined) || sameScore(fullTime, extraTime)) {
+            scoreHome = fullTime.home
+            scoreAway = fullTime.away
+        } else if (extraTime.home >= regularTime.home && extraTime.away >= regularTime.away) {
+            scoreHome = extraTime.home
+            scoreAway = extraTime.away
+        } else {
+            scoreHome = combined.home
+            scoreAway = combined.away
+        }
+    } else if (hasScorePair(fullTime)) {
+        scoreHome = fullTime.home
+        scoreAway = fullTime.away
+    } else if (hasScorePair(regularTime)) {
+        scoreHome = regularTime.home
+        scoreAway = regularTime.away
     }
-    // else: contaminated fullTime, leave null — DB has correct value
 
     return {
-        fullTime: { home: regHome, away: regAway }, // always regulation
+        fullTime: { home: scoreHome, away: scoreAway },
         halfTime: { home: m.score?.halfTime?.home ?? null, away: m.score?.halfTime?.away ?? null },
         penalties: wentToPenalties
             ? { home: m.score.penalties.home, away: m.score.penalties.away }

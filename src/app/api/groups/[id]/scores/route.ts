@@ -31,6 +31,35 @@ function isGroupStageLabel(groupLabel?: string | null) {
     return !groupLabel || !['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
 }
 
+function hasScorePair(score: any) {
+    return score?.home !== null && score?.home !== undefined
+        && score?.away !== null && score?.away !== undefined
+}
+
+function sameScore(a: any, b: any) {
+    return hasScorePair(a) && hasScorePair(b) && a.home === b.home && a.away === b.away
+}
+
+function addScores(a: any, b: any) {
+    return { home: a.home + b.home, away: a.away + b.away }
+}
+
+function extractScoreAfterExtraTime(apiMatch: any) {
+    const regularTime = apiMatch.score?.regularTime
+    const extraTime = apiMatch.score?.extraTime
+    const fullTime = apiMatch.score?.fullTime
+
+    if (hasScorePair(extraTime) && hasScorePair(regularTime)) {
+        const combined = addScores(regularTime, extraTime)
+        if (sameScore(fullTime, combined) || sameScore(fullTime, extraTime)) return fullTime
+        if (extraTime.home >= regularTime.home && extraTime.away >= regularTime.away) return extraTime
+        return combined
+    }
+    if (hasScorePair(fullTime)) return fullTime
+    if (hasScorePair(regularTime)) return regularTime
+    return { home: null, away: null }
+}
+
 // Mirror of the same pattern used in leaderboard/page.tsx
 async function fetchApiFinishedMatches(dbMatches: any[]): Promise<any[]> {
     try {
@@ -49,8 +78,9 @@ async function fetchApiFinishedMatches(dbMatches: any[]): Promise<any[]> {
 
             const homeCode = TEAM_NAME_TO_CODE[apiMatch.homeTeam?.name] || apiMatch.homeTeam?.tla
             const awayCode = TEAM_NAME_TO_CODE[apiMatch.awayTeam?.name] || apiMatch.awayTeam?.tla
-            const homeScore = apiMatch.score?.fullTime?.home
-            const awayScore = apiMatch.score?.fullTime?.away
+            const score = extractScoreAfterExtraTime(apiMatch)
+            const homeScore = score.home
+            const awayScore = score.away
 
             if (!homeCode || !awayCode || typeof homeScore !== 'number' || typeof awayScore !== 'number') continue
 
@@ -66,13 +96,24 @@ async function fetchApiFinishedMatches(dbMatches: any[]): Promise<any[]> {
 
             const staticMatch = ALL_MATCHES.find(m => m.id === dbMatch.id)
             if (!staticMatch) continue
+            const apiQualifier = apiMatch.score?.winner === 'HOME_TEAM'
+                ? homeCode
+                : apiMatch.score?.winner === 'AWAY_TEAM'
+                    ? awayCode
+                    : null
+            const wentToPenalties = apiMatch.score?.penalties?.home !== null && apiMatch.score?.penalties?.home !== undefined
 
             finished.push({
                 ...staticMatch,
+                home_team: dbMatch.home_team ?? homeCode,
+                away_team: dbMatch.away_team ?? awayCode,
                 stage: dbMatch?.stage ?? (isGroupStageLabel(staticMatch.group_label) ? 'group' : staticMatch.group_label),
-                qualifier: dbMatch?.qualifier ?? null,
+                qualifier: dbMatch?.qualifier ?? apiQualifier ?? null,
                 home_score: homeScore,
                 away_score: awayScore,
+                went_to_penalties: wentToPenalties,
+                penalty_home_score: wentToPenalties ? apiMatch.score.penalties.home : dbMatch.penalty_home_score ?? null,
+                penalty_away_score: wentToPenalties ? apiMatch.score.penalties.away : dbMatch.penalty_away_score ?? null,
                 status: 'finished',
             })
         }

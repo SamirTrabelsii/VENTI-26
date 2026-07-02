@@ -64,6 +64,57 @@ const NAME_TO_CODE: Record<string, string> = {
     'Panama': 'PAN',
 }
 
+function hasScorePair(score: any) {
+    return score?.home !== null && score?.home !== undefined
+        && score?.away !== null && score?.away !== undefined
+}
+
+function sameScore(a: any, b: any) {
+    return hasScorePair(a) && hasScorePair(b) && a.home === b.home && a.away === b.away
+}
+
+function addScores(a: any, b: any) {
+    return { home: a.home + b.home, away: a.away + b.away }
+}
+
+function extractScore(apiMatch: any) {
+    const wentToPenalties = apiMatch.score?.penalties?.home !== null && apiMatch.score?.penalties?.home !== undefined
+    const regularTime = apiMatch.score?.regularTime
+    const extraTime = apiMatch.score?.extraTime
+    const fullTime = apiMatch.score?.fullTime
+
+    let home_score: number | null = null
+    let away_score: number | null = null
+
+    if (hasScorePair(extraTime) && hasScorePair(regularTime)) {
+        const combined = addScores(regularTime, extraTime)
+        if (sameScore(fullTime, combined) || sameScore(fullTime, extraTime)) {
+            home_score = fullTime.home
+            away_score = fullTime.away
+        } else if (extraTime.home >= regularTime.home && extraTime.away >= regularTime.away) {
+            home_score = extraTime.home
+            away_score = extraTime.away
+        } else {
+            home_score = combined.home
+            away_score = combined.away
+        }
+    } else if (hasScorePair(fullTime)) {
+        home_score = fullTime.home
+        away_score = fullTime.away
+    } else if (hasScorePair(regularTime)) {
+        home_score = regularTime.home
+        away_score = regularTime.away
+    }
+
+    return {
+        home_score,
+        away_score,
+        penalty_home_score: wentToPenalties ? apiMatch.score.penalties.home : null,
+        penalty_away_score: wentToPenalties ? apiMatch.score.penalties.away : null,
+        went_to_penalties: wentToPenalties,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/cron/sync
 // Called every minute by Vercel cron. Fetches live match data from
@@ -84,7 +135,7 @@ export async function GET(request: Request) {
     // ── 1. Load existing DB matches ─────────────────────────────────────────
     const { data: dbMatches, error: dbErr } = await supabase
         .from('matches')
-        .select('id, status, home_score, away_score, minute, home_team, away_team, kickoff')
+        .select('id, status, home_score, away_score, penalty_home_score, penalty_away_score, went_to_penalties, minute, home_team, away_team, kickoff')
 
     if (dbErr || !dbMatches) {
         return NextResponse.json({ error: `DB Error: ${dbErr?.message}` }, { status: 500 })
@@ -198,21 +249,25 @@ export async function GET(request: Request) {
         }
 
         // Determine scores
-        const home_score = status === 'upcoming' ? null : (apiMatch.score?.fullTime?.home ?? null)
-        const away_score = status === 'upcoming' ? null : (apiMatch.score?.fullTime?.away ?? null)
+        const scoreData = status === 'upcoming'
+            ? { home_score: null, away_score: null, penalty_home_score: null, penalty_away_score: null, went_to_penalties: false }
+            : extractScore(apiMatch)
 
         // Only write if something actually changed
         const changed =
             dbMatch.status !== status ||
-            dbMatch.home_score !== home_score ||
-            dbMatch.away_score !== away_score ||
+            dbMatch.home_score !== scoreData.home_score ||
+            dbMatch.away_score !== scoreData.away_score ||
+            dbMatch.penalty_home_score !== scoreData.penalty_home_score ||
+            dbMatch.penalty_away_score !== scoreData.penalty_away_score ||
+            dbMatch.went_to_penalties !== scoreData.went_to_penalties ||
             dbMatch.minute !== minute
 
         if (!changed) continue
 
         const { error: updateErr } = await supabase
             .from('matches')
-            .update({ status, home_score, away_score, minute })
+            .update({ status, ...scoreData, minute })
             .eq('id', dbMatch.id)
 
         if (updateErr) {

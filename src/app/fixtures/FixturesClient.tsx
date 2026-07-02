@@ -111,6 +111,9 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
             let status = dbMatch?.status ?? 'upcoming'
             let hScore = dbMatch?.home_score ?? null
             let aScore = dbMatch?.away_score ?? null
+            let wentToPenalties = dbMatch?.went_to_penalties ?? false
+            let penaltyHomeScore = dbMatch?.penalty_home_score ?? null
+            let penaltyAwayScore = dbMatch?.penalty_away_score ?? null
 
             // if (apiMatch) {
             //     if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') status = 'live'
@@ -126,7 +129,6 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
             if (apiMatch) {
                 if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') {
                     status = 'live'
-                    // Only use live API scores during active play
                     if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
                         hScore = apiMatch.score.fullTime.home
                     }
@@ -135,8 +137,18 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                     }
                 } else if (apiMatch.status === 'FINISHED') {
                     status = 'finished'
-                    // Trust DB scores for finished matches — they are already regulation-only
-                    // hScore/aScore already set from dbMatch above, don't override
+                    if (apiMatch.score?.fullTime?.home !== null && apiMatch.score?.fullTime?.home !== undefined) {
+                        hScore = apiMatch.score.fullTime.home
+                    }
+                    if (apiMatch.score?.fullTime?.away !== null && apiMatch.score?.fullTime?.away !== undefined) {
+                        aScore = apiMatch.score.fullTime.away
+                    }
+                }
+
+                if (apiMatch.score?.went_to_penalties || apiMatch.score?.penalties) {
+                    wentToPenalties = true
+                    penaltyHomeScore = apiMatch.score?.penalties?.home ?? penaltyHomeScore
+                    penaltyAwayScore = apiMatch.score?.penalties?.away ?? penaltyAwayScore
                 }
             }
             return {
@@ -148,9 +160,9 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 dbStatus: status,
                 actualHomeScore: hScore,
                 actualAwayScore: aScore,
-                went_to_penalties: dbMatch?.went_to_penalties ?? false,
-                penalty_home_score: dbMatch?.penalty_home_score ?? null,
-                penalty_away_score: dbMatch?.penalty_away_score ?? null,
+                went_to_penalties: wentToPenalties,
+                penalty_home_score: penaltyHomeScore,
+                penalty_away_score: penaltyAwayScore,
                 isKnockoutMatch: isKnockout(m.group_label),
             }
         })
