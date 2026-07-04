@@ -33,6 +33,23 @@ function getKnockoutPickSlot(matchId: string): { round: string; slotIndex: numbe
     return { round: match[1].toLowerCase(), slotIndex: Number(match[2]) - 1 }
 }
 
+function inferQualifier(match: any, homeScore: number | null, awayScore: number | null): string | null {
+    if (match?.qualifier) return match.qualifier
+    if (
+        match?.went_to_penalties &&
+        typeof match?.penalty_home_score === 'number' &&
+        typeof match?.penalty_away_score === 'number'
+    ) {
+        if (match.penalty_home_score > match.penalty_away_score) return match.home_team ?? null
+        if (match.penalty_away_score > match.penalty_home_score) return match.away_team ?? null
+    }
+    if (typeof homeScore === 'number' && typeof awayScore === 'number') {
+        if (homeScore > awayScore) return match?.home_team ?? null
+        if (awayScore > homeScore) return match?.away_team ?? null
+    }
+    return null
+}
+
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -49,13 +66,14 @@ export async function GET(
     // 2. Fetch match from DB
     const { data: dbMatch } = await supabase
         .from('matches')
-        .select('home_team, away_team, home_score, away_score, status, qualifier')
+        .select('home_team, away_team, home_score, away_score, status, qualifier, went_to_penalties, penalty_home_score, penalty_away_score')
         .eq('id', localMatch.id)
         .single()
 
     let effectiveHomeScore: number | null = dbMatch?.home_score ?? null
     let effectiveAwayScore: number | null = dbMatch?.away_score ?? null
     let effectiveStatus = dbMatch?.status ?? 'upcoming'
+    let effectiveQualifier: string | null = dbMatch?.qualifier ?? null
 
     // ── For LIVE matches: supplement DB score with fresh API data ───────────────
     // The DB cron only runs every minute; during a live game the DB score can lag
@@ -93,6 +111,8 @@ export async function GET(
                     } else if (liveMatch.status === 'FINISHED') {
                         effectiveStatus = 'finished'
                     }
+
+                    effectiveQualifier = liveMatch.qualifier ?? effectiveQualifier
                 }
             }
         } catch {
@@ -141,7 +161,7 @@ export async function GET(
                     true,
                     {
                         predQualifier: p.team_code,
-                        realQualifier: dbMatch?.qualifier ?? null,
+                        realQualifier: effectiveQualifier ?? inferQualifier(dbMatch, effectiveHomeScore, effectiveAwayScore),
                     }
                 )
                 : null

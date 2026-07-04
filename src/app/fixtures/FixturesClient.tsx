@@ -23,6 +23,23 @@ const ROUND_LABELS: Record<string, string> = {
 const isKnockout = (groupLabel: string) =>
     ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(groupLabel)
 
+function inferQualifier(match: any): string | null {
+    if (match.qualifier) return match.qualifier
+    if (
+        match.went_to_penalties &&
+        typeof match.penalty_home_score === 'number' &&
+        typeof match.penalty_away_score === 'number'
+    ) {
+        if (match.penalty_home_score > match.penalty_away_score) return match.home_team ?? null
+        if (match.penalty_away_score > match.penalty_home_score) return match.away_team ?? null
+    }
+    if (typeof match.actualHomeScore === 'number' && typeof match.actualAwayScore === 'number') {
+        if (match.actualHomeScore > match.actualAwayScore) return match.home_team ?? null
+        if (match.actualAwayScore > match.actualHomeScore) return match.away_team ?? null
+    }
+    return null
+}
+
 /** For knockout placeholders like "1A", "W-QF/1", etc., we format them nicely */
 function formatPlaceholder(code: string): string {
     if (code.startsWith('W-')) return `Winner ${code.slice(2).replace('/', ' ')}`
@@ -114,6 +131,7 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
             let wentToPenalties = dbMatch?.went_to_penalties ?? false
             let penaltyHomeScore = dbMatch?.penalty_home_score ?? null
             let penaltyAwayScore = dbMatch?.penalty_away_score ?? null
+            let qualifier = dbMatch?.qualifier ?? m.qualifier ?? null
 
             // if (apiMatch) {
             //     if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') status = 'live'
@@ -150,13 +168,14 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                     penaltyHomeScore = apiMatch.score?.penalties?.home ?? penaltyHomeScore
                     penaltyAwayScore = apiMatch.score?.penalties?.away ?? penaltyAwayScore
                 }
+                qualifier = apiMatch.qualifier ?? qualifier
             }
             return {
                 ...m,
                 home_team: dbMatch?.home_team ?? m.home_team,
                 away_team: dbMatch?.away_team ?? m.away_team,
                 kickoff: dbMatch?.kickoff ?? m.kickoff,
-                qualifier: dbMatch?.qualifier ?? m.qualifier,
+                qualifier,
                 dbStatus: status,
                 actualHomeScore: hScore,
                 actualAwayScore: aScore,
@@ -290,7 +309,7 @@ export default function FixturesClient({ predictions, dbMatches, liveKoPicks = [
                 ko,
                 {
                     predQualifier: prediction.qualifier_pick ?? prediction.team_code ?? null,
-                    realQualifier: m.qualifier ?? null,
+                    realQualifier: inferQualifier(m),
                 }
             )
             provisionalPoints = res.total
