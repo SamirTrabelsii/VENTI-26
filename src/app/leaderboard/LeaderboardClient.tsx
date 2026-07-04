@@ -29,7 +29,7 @@ export interface LeaderboardScope {
     type: 'phase' | 'round' | 'group'
     title: string
     short_title: string
-    subtitle: string
+    subtitle: React.ReactNode
     match_count: number
     finished_count: number
     users: LeaderboardUser[]

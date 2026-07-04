@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES, TEAMS } from '@/lib/wc2026-data'
 import Nav from '@/components/Nav'
 import LeaderboardClient, { LeaderboardScope, LeaderboardUser } from './LeaderboardClient'
 import { fetchAllRows } from '@/lib/supabase/pagination'
 import { computeFreshScores, normalizeBracketPickForScoring } from '@/lib/fresh-scores'
+import TeamFlag from '@/components/TeamFlag'
 
 const GROUP_TOTAL = GROUP_MATCHES.length   // 72
 const KNOCKOUT_TOTAL = 32                  // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
@@ -350,15 +351,27 @@ export default async function LeaderboardPage() {
             matchTotal: 2,
             filter: (match: any) => match.group_label === 'FINAL' || match.group_label === '3RD',
         },
-        ...GROUP_LABELS.map(group => ({
-            key: `group-${group.toLowerCase()}`,
-            type: 'group' as const,
-            title: `Group ${group}`,
-            short_title: group,
-            subtitle: `Tournament Group ${group}`,
-            matchTotal: 6,
-            filter: (match: any) => match.group_label === group,
-        })),
+        ...GROUP_LABELS.map(group => {
+            const groupTeams = TEAMS.filter(t => t.group === group)
+            return {
+                key: `group-${group.toLowerCase()}`,
+                type: 'group' as const,
+                title: `Group ${group}`,
+                short_title: group,
+                subtitle: (
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        {groupTeams.map(t => (
+                            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <TeamFlag teamCode={t.code} size={16} />
+                                <span>{t.name}</span>
+                            </div>
+                        ))}
+                    </div>
+                ),
+                matchTotal: 6,
+                filter: (match: any) => match.group_label === group,
+            }
+        }),
     ]
 
     const leaderboardScopes = scopeDefinitions.map(scope =>
