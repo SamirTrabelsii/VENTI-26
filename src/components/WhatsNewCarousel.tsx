@@ -3,53 +3,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-    AlertTriangle,
-    ChevronLeft,
-    ChevronRight,
-    Gift,
-    Medal,
-    Sparkles,
-    Swords,
-    Target,
-    X,
-    type LucideIcon
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutList, Sparkles, Trophy, X, type LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { APP_RELEASE_VERSION } from '@/lib/app-version'
+import { getRobohashUrl } from '@/lib/wc2026-data'
 
 type Slide = {
     title: string
     body: string
-    note: string
     Icon: LucideIcon
     accent: string
-    variant?: 'scoring' | 'bonus'
+    variant: 'leaderboard' | 'tabs'
+}
+
+type GroupStageLeader = {
+    id: string
+    display_name: string
+    avatar_color: string
+    total_points: number
+    exact_scores: number
+    correct_results: number
 }
 
 const STORAGE_PREFIX = 'venti26:whats-new'
-const SCORING_HIGHLIGHTS = [
-    { points: '+25', title: 'Exact score', detail: 'Hard cap' },
-    { points: '+10', title: 'Correct result', detail: 'Win/draw/loss' },
-    { points: '+10', title: 'Correct qualifier', detail: 'Right team advances' },
-    { points: '+3', title: 'GG / No Goal', detail: 'BTTS or clean sheet' },
-]
-const SCORING_LADDER = [
-    { error: '1', points: '+5' },
-    { error: '2', points: '+4' },
-    { error: '3', points: '+3' },
-    { error: '4', points: '+2' },
-    { error: '5', points: '+1' },
-    { error: '6+', points: '+0' }
-]
-
-const FIRST_R32_KICKOFF = '2026-06-28T18:00:00.000Z'
-
-function formatKickoffLocal(utc: string) {
-    const d = new Date(utc)
-    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
-        ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-}
+const RANKING_TABS = ['Overall', 'Group Stage', 'Knockout', 'Rounds', 'Groups']
 
 export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const router = useRouter()
@@ -58,37 +35,26 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const [storageKey, setStorageKey] = useState<string | null>(null)
     const [userId, setUserId] = useState<string | null>(null)
     const [active, setActive] = useState(0)
+    const [leaders, setLeaders] = useState<GroupStageLeader[]>([])
+    const [finishedCount, setFinishedCount] = useState(0)
+    const [matchCount, setMatchCount] = useState(72)
+    const [leadersLoading, setLeadersLoading] = useState(false)
+    const [leadersFetched, setLeadersFetched] = useState(false)
 
     const slides = useMemo<Slide[]>(() => [
         {
-            title: 'Knockout Bracket Reset',
-            body: 'The original knockout bracket was set up incorrectly. Your old picks won\'t count — but now you can re-predict with real knowledge from the group stage.',
-            note: 'تم إعادة تعيين توقعات مرحلة خروج المغلوب بسبب خطأ في الشجرة الأصلية. توقعاتكم السابقة لن تُحتسب — لكن يمكنكم الآن إعادة التوقع بناءً على ما شاهدتموه في دور المجموعات.',
-            Icon: AlertTriangle,
-            accent: '#F59E0B',
-        },
-        {
-            title: 'Live KO — Your New Arena',
-            body: 'Head to the Live KO page to predict every knockout match from R32 to the Final. Predictions open when teams are confirmed, lock at kickoff.',
-            note: `⚡ First R32 match: ${formatKickoffLocal(FIRST_R32_KICKOFF)} — don't miss it!`,
-            Icon: Swords,
-            accent: '#22C55E',
-        },
-        {
-            title: 'KO Scoring',
-            body: '',
-            note: '',
-            Icon: Target,
+            title: 'Group Stage Leaders',
+            body: 'Rankings now show who led the group phase, with a dedicated table for group-stage points.',
+            Icon: Trophy,
             accent: '#D4A843',
-            variant: 'scoring'
+            variant: 'leaderboard',
         },
         {
-            title: 'Qualification Bonus',
-            body: '+1 point for every team you predicted to qualify that actually made it through.',
-            note: '',
-            Icon: Gift,
-            accent: '#A78BFA',
-            variant: 'bonus'
+            title: 'Ranking Tabs',
+            body: 'Use the tabs to switch between overall, phases, specific rounds, and tournament groups.',
+            Icon: LayoutList,
+            accent: '#22C55E',
+            variant: 'tabs',
         },
     ], [])
 
@@ -147,6 +113,45 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
         }
     }, [visible])
 
+    useEffect(() => {
+        if (!visible || leadersFetched) return
+
+        let cancelled = false
+
+        async function fetchLeaders() {
+            const controller = new AbortController()
+            const timeout = window.setTimeout(() => controller.abort(), 5000)
+            setLeadersLoading(true)
+            try {
+                const res = await fetch('/api/leaderboard/group-stage-preview', {
+                    cache: 'no-store',
+                    signal: controller.signal,
+                })
+                if (!res.ok) throw new Error('Failed to load group-stage preview')
+                const data = await res.json()
+                if (cancelled) return
+                setLeaders(data.leaders ?? [])
+                setFinishedCount(data.finished_count ?? 0)
+                setMatchCount(data.match_count ?? 72)
+                setLeadersFetched(true)
+            } catch {
+                if (!cancelled) {
+                    setLeaders([])
+                    setLeadersFetched(true)
+                }
+            } finally {
+                window.clearTimeout(timeout)
+                if (!cancelled) setLeadersLoading(false)
+            }
+        }
+
+        fetchLeaders()
+
+        return () => {
+            cancelled = true
+        }
+    }, [visible, leadersFetched])
+
     const markSeen = () => {
         if (storageKey) {
             window.localStorage.setItem(storageKey, 'seen')
@@ -171,7 +176,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
     const goNext = () => {
         if (active === slides.length - 1) {
             markSeen()
-            router.push('/live-bracket')
+            router.push('/leaderboard')
             return
         }
 
@@ -212,7 +217,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                         <Sparkles size={18} className="text-[#D4A843]" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D4A843]">Important update</p>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D4A843]">Leaderboard update</p>
                                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">{active + 1} of {slides.length}</p>
                                     </div>
                                 </div>
@@ -265,86 +270,50 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                         </h2>
                                     </div>
 
-                                    {slide.variant === 'scoring' ? (
-                                        <div className="mt-3 space-y-2">
-                                            <p className="text-[13px] leading-snug text-zinc-300">
-                                                Knockout scoring — up to <span className="font-bold text-[#D4A843]">35 pts</span> per match. Exact score is king.
-                                            </p>
+                                    <div className="mt-3 space-y-3">
+                                        <p className="text-base leading-7 text-zinc-300">{slide.body}</p>
 
-                                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                                                {SCORING_HIGHLIGHTS.map(rule => (
-                                                    <div key={rule.title} className="border border-white/10 bg-white/[0.04] p-2">
-                                                        <p className="font-display text-2xl leading-none text-[#D4A843]">{rule.points}</p>
-                                                        <p className="mt-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-white">{rule.title}</p>
-                                                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-zinc-500">{rule.detail}</p>
+                                        {slide.variant === 'leaderboard' && (
+                                            <div className="space-y-2 border border-[#D4A843]/30 bg-[#D4A843]/[0.06] p-4">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D4A843]">Group stage ranking</p>
+                                                    <p className="font-display text-2xl leading-none text-white">{finishedCount}/{matchCount}</p>
+                                                </div>
+
+                                                {leadersLoading ? (
+                                                    <p className="py-4 text-sm text-zinc-400">Loading group-stage leaders...</p>
+                                                ) : leaders.length > 0 ? (
+                                                    leaders.map((user, index) => {
+                                                        const color = index === 0 ? '#D4A843' : index === 1 ? '#C0C0C0' : '#CD7F32'
+                                                        return (
+                                                            <div key={user.id} className="flex items-center gap-3 border border-white/10 bg-black/35 p-2">
+                                                                <div className="w-7 text-center font-display text-2xl leading-none" style={{ color }}>{index + 1}</div>
+                                                                <img src={getRobohashUrl(user.display_name, 52)} alt={user.display_name} className="h-10 w-10 rounded-full border-2 object-cover" style={{ borderColor: color, background: user.avatar_color }} />
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="truncate text-sm font-black text-white">{user.display_name}</p>
+                                                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">{user.exact_scores} EX / {user.correct_results} CR</p>
+                                                                </div>
+                                                                <p className="font-display text-3xl leading-none" style={{ color }}>{user.total_points}</p>
+                                                            </div>
+                                                        )
+                                                    })
+                                                ) : (
+                                                    <p className="py-4 text-sm text-zinc-400">No completed group-stage scores yet.</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {slide.variant === 'tabs' && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {RANKING_TABS.map(tab => (
+                                                    <div key={tab} className="border border-white/10 bg-white/[0.04] px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white">
+                                                        {tab}
                                                     </div>
                                                 ))}
                                             </div>
+                                        )}
 
-                                            <div className="border border-[#D4A843]/25 bg-[#D4A843]/[0.06] p-2">
-                                                <div className="mb-1.5 flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D4A843]">Goal accuracy</p>
-                                                    </div>
-                                                    <div className="font-display text-lg text-white">+5 to +0</div>
-                                                </div>
-                                                <div className="grid grid-cols-6 gap-1">
-                                                    {SCORING_LADDER.map(item => (
-                                                        <div key={item.error} className="border border-white/10 bg-black/35 px-0.5 py-1.5 text-center">
-                                                            <p className="text-[8px] font-black uppercase tracking-[0.12em] text-zinc-500">Off {item.error}</p>
-                                                            <p className="mt-0.5 font-display text-lg text-[#D4A843]">{item.points}</p>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div className="border border-white/10 bg-black/35 p-2">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Wrong winner</p>
-                                                    <p className="font-display text-xl text-white">0 base</p>
-                                                </div>
-                                                <div className="border border-white/10 bg-black/35 p-2">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">Max per KO match</p>
-                                                    <p className="font-display text-xl text-[#D4A843]">35</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : slide.variant === 'bonus' ? (
-                                        <div className="mt-3 space-y-3">
-                                            <p className="text-base leading-7 text-zinc-300">
-                                                {slide.body}
-                                            </p>
-
-                                            <div className="border border-[#A78BFA]/30 bg-[#A78BFA]/[0.06] p-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="grid h-14 w-14 flex-shrink-0 place-items-center border border-[#A78BFA]/40 bg-black/40">
-                                                        <p className="font-display text-3xl text-[#A78BFA]">+1</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#A78BFA]">Per correct qualification</p>
-                                                        <p className="mt-1 text-sm leading-snug text-zinc-300">Predicted they qualify → they did → you score.</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-start gap-3 border border-white/10 bg-white/[0.04] p-3">
-                                                <Medal size={18} className="mt-0.5 shrink-0 text-[#D4A843]" />
-                                                <p className="text-sm leading-6 text-zinc-400">Calculated automatically after groups conclude.</p>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <p className="mt-4 text-base leading-7 text-zinc-300">
-                                                {slide.body}
-                                            </p>
-
-                                            {slide.note && (
-                                                <div className="mt-5 border border-white/10 bg-white/[0.04] p-4" style={{ direction: 'rtl', textAlign: 'right' }}>
-                                                    <p className="text-sm leading-7 text-zinc-300">{slide.note}</p>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
+                                    </div>
                                 </motion.div>
                             </AnimatePresence>
 
@@ -364,7 +333,7 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
                                     onClick={goNext}
                                     className="flex h-11 items-center gap-3 bg-[#D4A843] px-5 text-xs font-black uppercase tracking-[0.18em] text-black transition-transform hover:translate-x-0.5"
                                 >
-                                    {active === slides.length - 1 ? 'Let\'s Go' : 'Next'}
+                                    {active === slides.length - 1 ? 'Done' : 'Next'}
                                     <ChevronRight size={17} />
                                 </button>
                             </div>
@@ -375,4 +344,3 @@ export default function WhatsNewCarousel({ isGuest }: { isGuest?: boolean }) {
         </AnimatePresence>
     )
 }
-

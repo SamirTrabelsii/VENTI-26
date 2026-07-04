@@ -254,7 +254,7 @@ export async function GET(
             const current = liveTotalsByUser.get(pred.user_id) ?? { points: 0, exact: 0, correct: 0 }
             current.points += result.total
             if (result.type === 'exact') current.exact += 1
-            if (result.type === 'exact' || result.type === 'correct') current.correct += 1
+            if (result.type === 'correct') current.correct += 1
             liveTotalsByUser.set(pred.user_id, current)
         }
     }

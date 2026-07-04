@@ -148,8 +148,11 @@ export async function recalculateAllUsers(userIdFilter?: string[]): Promise<{
                 exact_scores++
             }
 
-            if (['exact', 'correct'].includes(result.type)) {
+            if (result.type === 'correct') {
                 correct_results++
+            }
+
+            if (['exact', 'correct'].includes(result.type)) {
                 streak++
             } else {
                 streak = 0

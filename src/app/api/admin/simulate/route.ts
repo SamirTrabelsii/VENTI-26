@@ -102,7 +102,8 @@ export async function POST(request: Request) {
                 user_id: p.user_id,
                 points: result.total,
                 isExact: result.type === 'exact',
-                isCorrect: ['exact', 'correct'].includes(result.type),
+                isCorrect: result.type === 'correct',
+                keepsStreak: result.type === 'exact' || result.type === 'correct',
             }
         })
 
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
                     total_points: existing.total_points + userResult.points,
                     exact_scores: existing.exact_scores + (userResult.isExact ? 1 : 0),
                     correct_results: existing.correct_results + (userResult.isCorrect ? 1 : 0),
-                    streak: userResult.isCorrect ? existing.streak + 1 : 0,
+                    streak: userResult.keepsStreak ? existing.streak + 1 : 0,
                     updated_at: new Date().toISOString(),
                 }).eq('user_id', membership.user_id).eq('group_id', membership.group_id)
             } else {
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
                     total_points: userResult.points,
                     exact_scores: userResult.isExact ? 1 : 0,
                     correct_results: userResult.isCorrect ? 1 : 0,
-                    streak: userResult.isCorrect ? 1 : 0,
+                    streak: userResult.keepsStreak ? 1 : 0,
                 })
             }
             totalScored++

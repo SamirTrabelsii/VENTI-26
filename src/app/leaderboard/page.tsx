@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES } from '@/lib/wc2026-data'
 import Nav from '@/components/Nav'
-import LeaderboardClient, { LeaderboardUser } from './LeaderboardClient'
+import LeaderboardClient, { LeaderboardScope, LeaderboardUser } from './LeaderboardClient'
 import { fetchAllRows } from '@/lib/supabase/pagination'
 import { computeFreshScores, normalizeBracketPickForScoring } from '@/lib/fresh-scores'
 
@@ -9,6 +9,7 @@ const GROUP_TOTAL = GROUP_MATCHES.length   // 72
 const KNOCKOUT_TOTAL = 32                  // R32(16)+R16(8)+QF(4)+SF(2)+3rd(1)+Final(1)
 const TOTAL_MATCHES = GROUP_TOTAL + KNOCKOUT_TOTAL  // 104
 const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+const GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
 const TEAM_NAME_TO_CODE: Record<string, string> = {
     'Mexico': 'MEX', 'South Africa': 'RSA', 'Korea Republic': 'KOR', 'South Korea': 'KOR',
@@ -56,6 +57,66 @@ function extractScoreAfterExtraTime(apiMatch: any) {
     if (hasScorePair(fullTime)) return fullTime
     if (hasScorePair(regularTime)) return regularTime
     return { home: null, away: null }
+}
+
+function isGroupWeekMatch(match: any, week: 1 | 2 | 3) {
+    if (!GROUP_LABELS.includes(match.group_label)) return false
+    const suffix = Number(String(match.id).slice(1))
+    if (week === 1) return suffix === 1 || suffix === 2
+    if (week === 2) return suffix === 3 || suffix === 4
+    return suffix === 5 || suffix === 6
+}
+
+function buildScopedLeaderboard(
+    profiles: any[],
+    finishedMatches: any[],
+    groupPredData: any[],
+    bracketPredData: any[],
+    scope: Omit<LeaderboardScope, 'users' | 'finished_count' | 'match_count'> & { filter: (match: any) => boolean; matchTotal: number },
+): LeaderboardScope {
+    const scopedMatches = finishedMatches.filter(scope.filter)
+    const totals = computeFreshScores(
+        profiles.map(p => p.id),
+        scopedMatches,
+        groupPredData,
+        bracketPredData,
+    )
+
+    const users = profiles
+        .map(p => {
+            const score = totals.get(p.id)
+            return {
+                id: p.id,
+                display_name: p.display_name ?? 'Player',
+                avatar_initials: p.avatar_initials ?? '??',
+                avatar_color: p.avatar_color ?? '#555',
+                total_points: score?.total_points ?? 0,
+                exact_scores: score?.exact_scores ?? 0,
+                correct_results: score?.correct_results ?? 0,
+                streak: score?.streak ?? 0,
+                group_preds: 0,
+                bracket_preds: 0,
+                total_preds: 0,
+            }
+        })
+        .filter(user => user.total_points > 0 || scopedMatches.length > 0)
+        .sort((a, b) =>
+            b.total_points - a.total_points ||
+            b.exact_scores - a.exact_scores ||
+            b.correct_results - a.correct_results ||
+            a.display_name.localeCompare(b.display_name)
+        )
+
+    return {
+        key: scope.key,
+        type: scope.type,
+        title: scope.title,
+        short_title: scope.short_title,
+        subtitle: scope.subtitle,
+        match_count: scope.matchTotal,
+        finished_count: scopedMatches.length,
+        users,
+    }
 }
 
 async function fetchApiFinishedMatches(dbMatches: any[]) {
@@ -198,6 +259,118 @@ export default async function LeaderboardPage() {
         }
     })
 
+    const scopeDefinitions = [
+        {
+            key: 'group-stage',
+            type: 'phase' as const,
+            title: 'Group Stage',
+            short_title: 'GS',
+            subtitle: 'All 72 group-stage matches',
+            matchTotal: GROUP_TOTAL,
+            filter: (match: any) => GROUP_LABELS.includes(match.group_label),
+        },
+        {
+            key: 'knockout',
+            type: 'phase' as const,
+            title: 'Knockout Phase',
+            short_title: 'KO',
+            subtitle: 'Round of 32 through the final',
+            matchTotal: KNOCKOUT_TOTAL,
+            filter: (match: any) => ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'].includes(match.group_label),
+        },
+        {
+            key: 'gw1',
+            type: 'round' as const,
+            title: 'Gameweek 1',
+            short_title: 'GW1',
+            subtitle: 'Opening group matches',
+            matchTotal: 24,
+            filter: (match: any) => isGroupWeekMatch(match, 1),
+        },
+        {
+            key: 'gw2',
+            type: 'round' as const,
+            title: 'Gameweek 2',
+            short_title: 'GW2',
+            subtitle: 'Second group matches',
+            matchTotal: 24,
+            filter: (match: any) => isGroupWeekMatch(match, 2),
+        },
+        {
+            key: 'gw3',
+            type: 'round' as const,
+            title: 'Gameweek 3',
+            short_title: 'GW3',
+            subtitle: 'Final group matches',
+            matchTotal: 24,
+            filter: (match: any) => isGroupWeekMatch(match, 3),
+        },
+        {
+            key: 'r32',
+            type: 'round' as const,
+            title: 'Round of 32',
+            short_title: 'R32',
+            subtitle: 'First knockout round',
+            matchTotal: 16,
+            filter: (match: any) => match.group_label === 'R32',
+        },
+        {
+            key: 'r16',
+            type: 'round' as const,
+            title: 'Round of 16',
+            short_title: 'R16',
+            subtitle: 'Last sixteen',
+            matchTotal: 8,
+            filter: (match: any) => match.group_label === 'R16',
+        },
+        {
+            key: 'qf',
+            type: 'round' as const,
+            title: 'Quarter-finals',
+            short_title: 'R8',
+            subtitle: 'Last eight',
+            matchTotal: 4,
+            filter: (match: any) => match.group_label === 'QF',
+        },
+        {
+            key: 'sf',
+            type: 'round' as const,
+            title: 'Semi-finals',
+            short_title: 'R4',
+            subtitle: 'Final four',
+            matchTotal: 2,
+            filter: (match: any) => match.group_label === 'SF',
+        },
+        {
+            key: 'finals',
+            type: 'round' as const,
+            title: 'Finals Weekend',
+            short_title: 'F/3rd',
+            subtitle: 'Final and 3rd place',
+            matchTotal: 2,
+            filter: (match: any) => match.group_label === 'FINAL' || match.group_label === '3RD',
+        },
+        ...GROUP_LABELS.map(group => ({
+            key: `group-${group.toLowerCase()}`,
+            type: 'group' as const,
+            title: `Group ${group}`,
+            short_title: group,
+            subtitle: `Tournament Group ${group}`,
+            matchTotal: 6,
+            filter: (match: any) => match.group_label === group,
+        })),
+    ]
+
+    const leaderboardScopes = scopeDefinitions.map(scope =>
+        buildScopedLeaderboard(
+            allProfiles || [],
+            finishedMatches,
+            groupPredData,
+            bracketPredData,
+            scope,
+        )
+    )
+
     const initials = profile?.avatar_initials ?? 'PL'
 
     // 6. Fetch non-finished match candidates near/past kickoff. The client
@@ -240,6 +413,7 @@ export default async function LeaderboardPage() {
 
                 <LeaderboardClient
                     initialLeaderboard={leaderboard}
+                    leaderboardScopes={leaderboardScopes}
                     initialLiveMatches={liveMatches}
                     initialScoredMatchIds={finishedMatches.map((m: any) => m.id)}
                     livePredictions={livePredictions}

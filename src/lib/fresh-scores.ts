@@ -113,7 +113,6 @@ export function computeFreshScores(
 
             if (result.type === 'exact') {
                 exact_scores++
-                correct_results++
                 streak++
             } else if (result.type === 'correct') {
                 correct_results++

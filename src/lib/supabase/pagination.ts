@@ -15,7 +15,12 @@ export async function fetchAllRows(query: any): Promise<any[]> {
         const { data, error } = await query.range(start, start + 999)
         
         if (error) {
-            console.error('Error fetching paginated rows:', error)
+            console.error('Error fetching paginated rows:', {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+            })
             throw error
         }
 

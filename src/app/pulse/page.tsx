@@ -25,8 +25,8 @@ export default async function PulsePage() {
 
     // --- 1. Fetch All Data ---
     const [finalPicks, sfPicks, matchesData, allPreds] = await Promise.all([
-        fetchAllRows(supabase.from('bracket_picks').select('team_code').eq('round', 'final')),
-        fetchAllRows(supabase.from('bracket_picks').select('user_id, team_code').eq('round', 'qf')),
+        fetchAllRows(supabase.from('live_ko_picks').select('team_code').eq('round', 'final')),
+        fetchAllRows(supabase.from('live_ko_picks').select('user_id, team_code').eq('round', 'qf')),
         supabase.from('matches').select('*'),
         fetchAllRows(supabase.from('predictions').select('match_id, home_score, away_score'))
     ])
