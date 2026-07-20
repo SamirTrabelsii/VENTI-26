@@ -42,7 +42,7 @@ Despite being a side project, the application saw incredible engagement over the
 
 ## ✨ Core Features
 
-*   **Live Match Tracking:** Real-time updates for all World Cup games, scores, and standings.
+*   **Live Match Tracking:** Automated real-time updates for all World Cup games, scores, and standings powered by seamless third-party Football API integration.
 *   **Private Leagues:** Custom group creation with invite codes for localized leaderboards.
 *   **Dynamic Predictions:** A specialized scoring algorithm awarding points based on correct match outcomes and exact scorelines.
 *   **Premium Interface:** Fully responsive, accessible, and heavily animated using Framer Motion.
@@ -73,6 +73,7 @@ Building a real-time, high-engagement app for a major event presented unique cha
 ### 💡 Lessons Learned
 *   **Real-time State Management:** Utilizing Supabase's real-time subscriptions taught valuable lessons in optimistic UI updates and keeping the client state perfectly synced with the database.
 *   **Rapid Prototyping:** The combination of Next.js App Router and Supabase Auth/Postgres proved to be an unmatched stack for moving quickly from idea to production.
+*   **External API Integrations:** Building automated background cron jobs to fetch and map live match data from third-party sports APIs ensured the dashboard was always up to date without manual intervention.
 
 ### 🚧 Challenges & Fixes
 | Challenge | Solution |
