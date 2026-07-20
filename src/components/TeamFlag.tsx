@@ -1,10 +1,10 @@
-import Image from 'next/image'
-import { getFlagUrl } from '@/lib/wc2026-data'
+import Image from "next/image";
+import { getFlagUrl } from "@/lib/wc2026-data";
 
 interface Props {
-    teamCode: string
-    size?: number
-    style?: React.CSSProperties
+  teamCode: string;
+  size?: number;
+  style?: React.CSSProperties;
 }
 
 /**
@@ -12,17 +12,32 @@ interface Props {
  * Serves flags in WebP/AVIF format with automatic resizing.
  */
 export default function TeamFlag({ teamCode, size = 32, style }: Props) {
-    const url = getFlagUrl(teamCode)
-    if (!url) return <span style={{ display: 'inline-block', width: size, height: Math.round(size * 0.6) }} />
-
+  const url = getFlagUrl(teamCode);
+  if (!url)
     return (
-        <Image
-            src={url}
-            alt={teamCode}
-            width={size}
-            height={Math.round(size * 0.6)}
-            style={{ borderRadius: 2, objectFit: 'cover', width: style?.width || size, height: style?.height || Math.round(size * 0.6), ...style }}
-            unoptimized={false}
-        />
-    )
+      <span
+        style={{
+          display: "inline-block",
+          width: size,
+          height: Math.round(size * 0.6),
+        }}
+      />
+    );
+
+  return (
+    <Image
+      src={url}
+      alt={teamCode}
+      width={size}
+      height={Math.round(size * 0.6)}
+      style={{
+        borderRadius: 2,
+        objectFit: "cover",
+        width: style?.width || size,
+        height: style?.height || Math.round(size * 0.6),
+        ...style,
+      }}
+      unoptimized={false}
+    />
+  );
 }

@@ -1,161 +1,312 @@
 // src/app/predict/page.tsx
-import { createClient } from '@/lib/supabase/server'
-import Nav from '@/components/Nav'
-import GroupPredictions from '@/components/GroupPredictions'
-import ThirdPlaceTable from '@/components/ThirdPlaceTable'
-import LockBanner from '@/components/LockBanner'
-import HowToPlay from '@/components/HowToPlay'
-import ScoringRulesDrawer from '@/components/ScoringRulesDrawer'
-import { PredictionProvider } from '@/components/PredictionContext'
-import { GROUPS, GROUP_MATCHES, getGroupMatches, getFlagUrl } from '@/lib/wc2026-data'
-import TeamFlag from '@/components/TeamFlag'
-import { GET as getLiveMatches } from '@/app/api/matches/live/route'
+import { createClient } from "@/lib/supabase/server";
+import Nav from "@/components/Nav";
+import GroupPredictions from "@/components/GroupPredictions";
+import ThirdPlaceTable from "@/components/ThirdPlaceTable";
+import LockBanner from "@/components/LockBanner";
+import HowToPlay from "@/components/HowToPlay";
+import ScoringRulesDrawer from "@/components/ScoringRulesDrawer";
+import { PredictionProvider } from "@/components/PredictionContext";
+import {
+  GROUPS,
+  GROUP_MATCHES,
+  getGroupMatches,
+  getFlagUrl,
+} from "@/lib/wc2026-data";
+import TeamFlag from "@/components/TeamFlag";
+import { GET as getLiveMatches } from "@/app/api/matches/live/route";
 
 export default async function PredictPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    let profile = null
-    let predictions: any[] = []
+  let profile = null;
+  let predictions: any[] = [];
 
-    if (user) {
-        const [{ data: pData }, { data: predsData }] = await Promise.all([
-            supabase.from('profiles').select('*').eq('id', user.id).single(),
-            supabase.from('predictions').select('*').eq('user_id', user.id),
-        ])
-        profile = pData
-        predictions = predsData || []
+  if (user) {
+    const [{ data: pData }, { data: predsData }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase.from("predictions").select("*").eq("user_id", user.id),
+    ]);
+    profile = pData;
+    predictions = predsData || [];
+  }
+
+  const predMap = new Map(predictions?.map((p) => [p.match_id, p]) ?? []);
+
+  const groupProgress = GROUPS.map((g) => {
+    const matches = getGroupMatches(g);
+    return {
+      g,
+      total: matches.length,
+      done: matches.filter((m) => predMap.has(m.id)).length,
+      flagUrl: getFlagUrl(matches[0]?.home_team ?? ""),
+    };
+  });
+
+  let liveMatches: any[] = [];
+  try {
+    const liveRes = await getLiveMatches();
+    if (liveRes.ok) {
+      const liveData = await liveRes.json();
+      liveMatches = liveData.matches || [];
     }
+  } catch (e) {
+    // silently fallback to static dates
+  }
 
-    const predMap = new Map(predictions?.map(p => [p.match_id, p]) ?? [])
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--black)" }}>
+      <Nav initials={profile?.avatar_initials ?? "PL"} isGuest={!user} />
 
-    const groupProgress = GROUPS.map(g => {
-        const matches = getGroupMatches(g)
-        return {
-            g,
-            total: matches.length,
-            done: matches.filter(m => predMap.has(m.id)).length,
-            flagUrl: getFlagUrl(matches[0]?.home_team ?? ''),
-        }
-    })
+      <div style={{ display: "flex", paddingTop: 64, minHeight: "100vh" }}>
+        <aside
+          className="hidden lg:block"
+          style={{
+            width: 230,
+            flexShrink: 0,
+            position: "sticky",
+            top: 64,
+            height: "calc(100vh - 64px)",
+            overflowY: "auto",
+            background: "var(--surface)",
+            borderRight: "1px solid var(--border)",
+            padding: "24px 0",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              padding: "0 18px",
+              marginBottom: 8,
+            }}
+          >
+            Navigation
+          </p>
+          <a
+            href="#group-stage"
+            style={{
+              display: "block",
+              padding: "10px 18px",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--cream)",
+              textDecoration: "none",
+            }}
+          >
+            📅 Group Stage
+          </a>
+          <a
+            href="#third-place"
+            style={{
+              display: "block",
+              padding: "10px 18px",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--cream)",
+              textDecoration: "none",
+            }}
+          >
+            🏅 3rd Place Ranking
+          </a>
 
-    let liveMatches: any[] = []
-    try {
-        const liveRes = await getLiveMatches()
-        if (liveRes.ok) {
-            const liveData = await liveRes.json()
-            liveMatches = liveData.matches || []
-        }
-    } catch (e) {
-        // silently fallback to static dates
-    }
+          <div
+            style={{
+              height: 1,
+              background: "var(--border)",
+              margin: "14px 18px",
+            }}
+          />
 
-    return (
-        <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
-            <Nav initials={profile?.avatar_initials ?? 'PL'} isGuest={!user} />
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              padding: "0 18px",
+              marginBottom: 8,
+            }}
+          >
+            Groups Quick Links
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "0 18px",
+            }}
+          >
+            {groupProgress.map(({ g }) => (
+              <a
+                key={g}
+                href={`#group-${g}`}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--dim)",
+                  textDecoration: "none",
+                }}
+              >
+                {g}
+              </a>
+            ))}
+          </div>
+        </aside>
 
-            <div style={{ display: 'flex', paddingTop: 64, minHeight: '100vh' }}>
-                <aside
-                    className="hidden lg:block"
-                    style={{
-                        width: 230, flexShrink: 0, position: 'sticky', top: 64,
-                        height: 'calc(100vh - 64px)', overflowY: 'auto',
-                        background: 'var(--surface)', borderRight: '1px solid var(--border)', padding: '24px 0',
-                    }}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div
+            className="lg:hidden sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-[var(--border)] px-4 py-3 flex gap-2 overflow-x-auto"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {groupProgress.map(({ g }) => (
+              <a
+                key={g}
+                href={`#group-${g}`}
+                className="flex-shrink-0 w-10 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline"
+              >
+                {g}
+              </a>
+            ))}
+            <a
+              href="#third-place"
+              className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline"
+            >
+              3rd Place
+            </a>
+          </div>
+
+          <main className="flex-1 min-w-0 p-4 pb-24 md:p-8 md:pb-8">
+            <PredictionProvider
+              userId={user?.id || null}
+              initialPredictions={predictions ?? []}
+              isUnlocked={profile?.is_unlocked ?? false}
+            >
+              <div style={{ width: "100%", maxWidth: 800, margin: "0 auto" }}>
+                <LockBanner />
+                <ScoringRulesDrawer />
+                <HowToPlay />
+              </div>
+
+              <div style={{ width: "100%" }}>
+                <div
+                  id="group-stage"
+                  style={{ marginBottom: 40, maxWidth: 800, margin: "0 auto" }}
                 >
-                    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--muted)', padding: '0 18px', marginBottom: 8 }}>
-                        Navigation
-                    </p>
-                    <a href="#group-stage" style={{ display: 'block', padding: '10px 18px', fontSize: 13, fontWeight: 500, color: 'var(--cream)', textDecoration: 'none' }}>
-                        📅 Group Stage
-                    </a>
-                    <a href="#third-place" style={{ display: 'block', padding: '10px 18px', fontSize: 13, fontWeight: 500, color: 'var(--cream)', textDecoration: 'none' }}>
-                        🏅 3rd Place Ranking
-                    </a>
-
-                    <div style={{ height: 1, background: 'var(--border)', margin: '14px 18px' }} />
-
-                    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--muted)', padding: '0 18px', marginBottom: 8 }}>
-                        Groups Quick Links
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 18px' }}>
-                        {groupProgress.map(({ g }) => (
-                            <a key={g} href={`#group-${g}`} style={{
-                                width: 28, height: 28, borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: 'var(--dim)', textDecoration: 'none'
-                            }}>
-                                {g}
-                            </a>
-                        ))}
-                    </div>
-                </aside>
-
-                <div className="flex-1 flex flex-col min-w-0">
-                    <div className="lg:hidden sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-[var(--border)] px-4 py-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                        {groupProgress.map(({ g }) => (
-                            <a key={g} href={`#group-${g}`} className="flex-shrink-0 w-10 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
-                                {g}
-                            </a>
-                        ))}
-                        <a href="#third-place" className="flex-shrink-0 px-4 h-10 rounded-lg bg-surface2 border border-[var(--border)] flex items-center justify-center text-sm font-semibold text-dim no-underline">
-                            3rd Place
-                        </a>
-                    </div>
-
-                    <main className="flex-1 min-w-0 p-4 pb-24 md:p-8 md:pb-8">
-                        <PredictionProvider
-                            userId={user?.id || null}
-                            initialPredictions={predictions ?? []}
-                            isUnlocked={profile?.is_unlocked ?? false}
+                  <h1
+                    style={{
+                      fontFamily: "Bebas Neue",
+                      fontSize: 44,
+                      color: "var(--gold)",
+                      marginBottom: 20,
+                    }}
+                  >
+                    Group Stage Predictions
+                  </h1>
+                  {GROUPS.map((g) => {
+                    const baseMatches = getGroupMatches(g);
+                    const activeMatches = baseMatches.map((m) => {
+                      const lm = liveMatches.find(
+                        (l) =>
+                          (l._homeCode === m.home_team &&
+                            l._awayCode === m.away_team) ||
+                          (l.homeTeam?.tla === m.home_team &&
+                            l.awayTeam?.tla === m.away_team),
+                      );
+                      return { ...m, kickoff: lm?.utcDate || m.kickoff };
+                    });
+                    return (
+                      <div
+                        id={`group-${g}`}
+                        key={g}
+                        style={{
+                          marginBottom: 60,
+                          paddingBottom: 40,
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 14,
+                            marginBottom: 28,
+                          }}
                         >
-                            <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
-                                <LockBanner />
-                                <ScoringRulesDrawer />
-                                <HowToPlay />
-                            </div>
-
-                            <div style={{ width: '100%' }}>
-
-                                <div id="group-stage" style={{ marginBottom: 40, maxWidth: 800, margin: '0 auto' }}>
-                                    <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 44, color: 'var(--gold)', marginBottom: 20 }}>Group Stage Predictions</h1>
-                                    {GROUPS.map((g) => {
-                                        const baseMatches = getGroupMatches(g)
-                                        const activeMatches = baseMatches.map(m => {
-                                            const lm = liveMatches.find(l =>
-                                                (l._homeCode === m.home_team && l._awayCode === m.away_team) ||
-                                                (l.homeTeam?.tla === m.home_team && l.awayTeam?.tla === m.away_team)
-                                            )
-                                            return { ...m, kickoff: lm?.utcDate || m.kickoff }
-                                        })
-                                        return (
-                                            <div id={`group-${g}`} key={g} style={{ marginBottom: 60, paddingBottom: 40, borderBottom: '1px solid var(--border)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-                                                    <TeamFlag teamCode={activeMatches[0]?.home_team ?? ''} size={60} />
-                                                    <div>
-                                                        <h2 style={{ fontFamily: 'Bebas Neue', fontSize: 32, lineHeight: 1 }}>Group {g}</h2>
-                                                    </div>
-                                                </div>
-                                                <GroupPredictions
-                                                    activeMatches={activeMatches}
-                                                    predictions={predictions || []}
-                                                    userId={user?.id ?? ''}
-                                                    nextGroup={null}
-                                                />
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-
-                                <div id="third-place" style={{ marginBottom: 80, maxWidth: 800, margin: '0 auto' }}>
-                                    <h1 style={{ fontFamily: 'Bebas Neue', fontSize: 44, color: 'var(--gold)', marginBottom: 20 }}>3rd Place Standings</h1>
-                                    <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20 }}>The top 8 third-placed teams across all 12 groups advance to the Round of 32.</p>
-                                    <ThirdPlaceTable groupMatches={GROUP_MATCHES} />
-                                </div>
-
-                            </div>
-                        </PredictionProvider>
-                    </main>
+                          <TeamFlag
+                            teamCode={activeMatches[0]?.home_team ?? ""}
+                            size={60}
+                          />
+                          <div>
+                            <h2
+                              style={{
+                                fontFamily: "Bebas Neue",
+                                fontSize: 32,
+                                lineHeight: 1,
+                              }}
+                            >
+                              Group {g}
+                            </h2>
+                          </div>
+                        </div>
+                        <GroupPredictions
+                          activeMatches={activeMatches}
+                          predictions={predictions || []}
+                          userId={user?.id ?? ""}
+                          nextGroup={null}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-            </div>
+
+                <div
+                  id="third-place"
+                  style={{ marginBottom: 80, maxWidth: 800, margin: "0 auto" }}
+                >
+                  <h1
+                    style={{
+                      fontFamily: "Bebas Neue",
+                      fontSize: 44,
+                      color: "var(--gold)",
+                      marginBottom: 20,
+                    }}
+                  >
+                    3rd Place Standings
+                  </h1>
+                  <p
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: 14,
+                      marginBottom: 20,
+                    }}
+                  >
+                    The top 8 third-placed teams across all 12 groups advance to
+                    the Round of 32.
+                  </p>
+                  <ThirdPlaceTable groupMatches={GROUP_MATCHES} />
+                </div>
+              </div>
+            </PredictionProvider>
+          </main>
         </div>
-    )
+      </div>
+    </div>
+  );
 }
